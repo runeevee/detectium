@@ -1,3 +1,6 @@
+import { analyzePostsWithOpenAI } from '../utils/openaiService';
+import type { AnalyzePostsRequest, AnalyzePostsResponse } from '../utils/types';
+
 export default defineBackground(() => {
   console.log('[Detectium] Background Service Worker Started');
 
@@ -6,9 +9,16 @@ export default defineBackground(() => {
     console.log('[Detectium] Extension installed/updated');
 
     // 기본 설정 초기화
-    chrome.storage.sync.get(['isEnabled'], (result) => {
+    chrome.storage.sync.get(['isEnabled', 'detectionThreshold'], (result) => {
+      const updates: Record<string, unknown> = {};
       if (result.isEnabled === undefined) {
-        chrome.storage.sync.set({ isEnabled: true });
+        updates.isEnabled = true;
+      }
+      if (result.detectionThreshold === undefined) {
+        updates.detectionThreshold = 70;
+      }
+      if (Object.keys(updates).length > 0) {
+        chrome.storage.sync.set(updates);
       }
     });
 
@@ -41,6 +51,43 @@ export default defineBackground(() => {
         sendResponse({ isEnabled: result.isEnabled ?? true });
       });
       return true; // 비동기 응답 대기
+    }
+
+    // 게시글 일괄 AI 분석 요청
+    if (message.type === 'ANALYZE_POSTS_REQUEST') {
+      const req = message as AnalyzePostsRequest;
+
+      chrome.storage.sync.get(['isEnabled', 'apiKey', 'detectionThreshold'], async (storage) => {
+        const isEnabled = storage.isEnabled !== false;
+        if (!isEnabled) {
+          sendResponse({
+            success: false,
+            error: 'Detectium 확장이 비활성화되어 있습니다.',
+          } as AnalyzePostsResponse);
+          return;
+        }
+
+        const apiKey = typeof storage.apiKey === 'string' ? storage.apiKey : undefined;
+        const threshold = typeof storage.detectionThreshold === 'number' ? storage.detectionThreshold : 70;
+
+        try {
+          console.log(`[Detectium] Background received ${req.posts?.length || 0} posts to analyze`);
+          const results = await analyzePostsWithOpenAI(req.posts, apiKey, threshold);
+          console.log(`[Detectium] OpenAI analysis complete:`, results);
+          sendResponse({
+            success: true,
+            results,
+          } as AnalyzePostsResponse);
+        } catch (error: any) {
+          console.error('[Detectium] Analysis error in background:', error);
+          sendResponse({
+            success: false,
+            error: error?.message || '분석 중 알 수 없는 오류가 발생했습니다.',
+          } as AnalyzePostsResponse);
+        }
+      });
+
+      return true; // 비동기 sendResponse 대기
     }
   });
 });
