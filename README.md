@@ -7,8 +7,24 @@ SNS 왜곡 게시글 / 가짜뉴스 판별기
 
 - [ ] UI로 경고 띄우기
 
-개발환경
-vscode
+## 테스트 방법
+### extension
+터미널을 extension에서 실행
 
-Android Studio
-안녕
+(extension 폴더 우클릭 -> 통합 터미널에서 열기)
+```
+npm run build
+```
+
+```
+아래 단계는 한번만 실행
+
+- 크롬에서 chrome://extensions 접속
+- 개발자모드 ON
+- '압축해제된 확장 프로그램 코드' 버튼 클릭
+- extension/.output/chrome-mv3 폴더 선택 후 등록
+```
+
+디버그
+
+<AI님 추가해주세요>
