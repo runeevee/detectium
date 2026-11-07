@@ -1,4 +1,4 @@
-import { createSignal, onMount, Show } from 'solid-js';
+import { createSignal, onMount, Show } from "solid-js";
 
 interface Settings {
   [key: string]: unknown;
@@ -15,7 +15,7 @@ const DEFAULT_SETTINGS: Settings = {
   highlightColor: '#4f46e5',
 };
 
-export default function App() {
+export default () => {
   const [isEnabled, setIsEnabled] = createSignal<boolean>(DEFAULT_SETTINGS.isEnabled);
   const [apiKey, setApiKey] = createSignal<string>(DEFAULT_SETTINGS.apiKey);
   const [detectionThreshold, setDetectionThreshold] = createSignal<number>(DEFAULT_SETTINGS.detectionThreshold);
@@ -149,4 +149,4 @@ export default function App() {
       </div>
     </Show>
   );
-}
+};

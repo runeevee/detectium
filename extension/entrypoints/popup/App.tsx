@@ -1,6 +1,6 @@
-import { createSignal, onMount, Show } from 'solid-js';
+import { createSignal, onMount, Show } from "solid-js";
 
-export default function App() {
+export default () => {
   const [isEnabled, setIsEnabled] = createSignal<boolean>(true);
   const [currentUrl, setCurrentUrl] = createSignal<string>('');
   const [loading, setLoading] = createSignal<boolean>(true);
@@ -87,4 +87,4 @@ export default function App() {
       </div>
     </Show>
   );
-}
+};
