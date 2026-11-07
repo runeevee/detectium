@@ -1,13 +1,8 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { render } from 'solid-js/web';
 import App from './App';
 import './style.css';
 
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  ReactDOM.createRoot(rootElement).render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
+const root = document.getElementById('root');
+if (root) {
+  render(() => <App />, root);
 }
