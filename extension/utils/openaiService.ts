@@ -16,19 +16,57 @@ export async function analyzePostsWithOpenAI(
     return [];
   }
 
+  // 캡션이 빈 문자열이거나 작성자 계정명만 포함되어 있는 게시글은 API 전송에서 제외 (요구사항 6)
+  const validPosts = posts.filter((p) => {
+    const trimmedContent = (p.content || '').trim();
+    const trimmedAuthor = (p.author || '').trim();
+    if (p.platform === 'instagram' && !trimmedContent) {
+      console.warn(`[Detectium][openaiService.ts:analyzePostsWithOpenAI] 인스타그램 캡션이 비어 있어 제외됨 (ID: ${p.id})`);
+      return false;
+    }
+    if (!trimmedContent && (!p.mediaDescription || p.mediaDescription.length < 10)) {
+      console.warn(`[Detectium][openaiService.ts:analyzePostsWithOpenAI] 본문이 없어 제외됨 (ID: ${p.id})`);
+      return false;
+    }
+    if (trimmedContent === trimmedAuthor || trimmedContent.replace(/[@\s]/g, '') === trimmedAuthor.replace(/[@\s]/g, '')) {
+      console.warn(`[Detectium][openaiService.ts:analyzePostsWithOpenAI] 작성자 계정명만 포함되어 제외됨 (ID: ${p.id})`);
+      return false;
+    }
+    return true;
+  });
+
+  if (validPosts.length === 0) {
+    console.log('[Detectium][openaiService.ts:analyzePostsWithOpenAI] 유효한 검증 대상 게시글이 없어 API 호출 생략');
+    return [];
+  }
+
+  validPosts.forEach((p, idx) => {
+    console.log(
+      `[Detectium][openaiService.ts:analyzePostsWithOpenAI #${idx + 1}] ID: ${p.id} | 작성자: ${p.author} | 캡션 길이: ${p.content?.length || 0}자 | 미리보기: "${(p.content || '').slice(0, 100)}..."`
+    );
+  });
+
   const client = new OpenAI({
     apiKey: effectiveKey,
     // 브라우저 확장 프로그램 서비스 워커 환경 지원
     dangerouslyAllowBrowser: true,
   });
 
-  const promptInput = posts.map((p) => ({
+  const promptInput = validPosts.map((p) => ({
     id: p.id,
     platform: p.platform,
     author: p.author || '알 수 없음',
     content: p.content,
     mediaDescription: p.mediaDescription || '',
   }));
+  promptInput.forEach((post, index) => {
+    console.info('[Detectium][API] OpenAI 요청 본문 구성 확인', {
+      id: post.id,
+      captionLength: post.content.length,
+      exactCaptionPreserved: post.content === validPosts[index]?.content,
+      captionPreview: `${post.content.slice(0, 100)}${post.content.length > 100 ? '...' : ''}`,
+    });
+  });
 
   const systemPrompt = `
 당신은 SNS 게시글, 카드뉴스, 온라인 기사의 "통계 왜곡"과 "가짜뉴스/허위정보"를 전문적으로 판별하는 대한민국 최고의 팩트체커 AI "Detectium"입니다.
