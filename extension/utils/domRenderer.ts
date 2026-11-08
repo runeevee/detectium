@@ -1,5 +1,14 @@
 import type { AnalysisResult } from './types';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export function injectWarningBanner(
   targetElement: HTMLElement,
   result: AnalysisResult,
@@ -27,11 +36,26 @@ export function injectWarningBanner(
   // Shadow DOM 부착으로 외부 사이트(X, 인스타그램)의 CSS 충돌 완벽 방지
   const shadow = host.attachShadow({ mode: 'open' });
 
-  // 카테고리별 테마 색상 설정
+  // 카테고리별 테마 색상 및 아이콘 설정
+  const isAgitation = result.category.includes('선동');
   const isStatDistortion = result.category.includes('통계');
-  const alertColor = isStatDistortion ? '#f59e0b' : '#ef4444'; // 통계 왜곡은 Amber, 가짜뉴스는 Red
-  const alertBg = isStatDistortion ? 'rgba(245, 158, 11, 0.08)' : 'rgba(239, 68, 68, 0.08)';
-  const alertBorder = isStatDistortion ? 'rgba(245, 158, 11, 0.35)' : 'rgba(239, 68, 68, 0.35)';
+
+  let categoryIcon = '🚨';
+  let alertColor = '#ef4444'; // Red (가짜뉴스/허위사실)
+  let alertBg = 'rgba(239, 68, 68, 0.08)';
+  let alertBorder = 'rgba(239, 68, 68, 0.35)';
+
+  if (isAgitation) {
+    categoryIcon = '📢'; // 확성기 (선동성 게시글)
+    alertColor = '#f97316'; // Orange
+    alertBg = 'rgba(249, 115, 22, 0.1)';
+    alertBorder = 'rgba(249, 115, 22, 0.4)';
+  } else if (isStatDistortion) {
+    categoryIcon = '📊'; // 통계 왜곡
+    alertColor = '#f59e0b'; // Amber
+    alertBg = 'rgba(245, 158, 11, 0.08)';
+    alertBorder = 'rgba(245, 158, 11, 0.35)';
+  }
 
   const checkedTagsHtml = (result.checkedPoints || [])
     .map(
@@ -47,10 +71,22 @@ export function injectWarningBanner(
         margin-right: 4px;
         margin-bottom: 4px;
         border: 1px solid rgba(255, 255, 255, 0.1);
-      "># ${tag}</span>
+      "># ${escapeHtml(tag)}</span>
     `
     )
     .join('');
+
+  const ocrHtml =
+    result.extractedImageText &&
+    result.extractedImageText.trim() &&
+    result.extractedImageText !== '이미지 내 텍스트 없음'
+      ? `
+      <div class="ocr-section">
+        <div class="ocr-title">🖼️ 이미지 추출 텍스트 (OCR 판독)</div>
+        <div class="ocr-content">${escapeHtml(result.extractedImageText)}</div>
+      </div>
+    `
+      : '';
 
   shadow.innerHTML = `
     <style>
@@ -145,6 +181,30 @@ export function injectWarningBanner(
         margin: 0 0 10px 0;
         word-break: break-word;
       }
+      .ocr-section {
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-left: 3px solid ${alertColor};
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin-bottom: 10px;
+      }
+      .ocr-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: #94a3b8;
+        margin-bottom: 4px;
+        letter-spacing: 0.02em;
+      }
+      .ocr-content {
+        font-size: 12px;
+        color: #e2e8f0;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 120px;
+        overflow-y: auto;
+      }
       .tags-container {
         display: flex;
         flex-wrap: wrap;
@@ -172,22 +232,25 @@ export function injectWarningBanner(
       <div class="card-header">
         <div class="badge-group">
           <span class="category-pill">
-            <span>${isStatDistortion ? '📊' : '🚨'}</span>
-            <span>Detectium 경고: ${result.category}</span>
+            <span>${categoryIcon}</span>
+            <span>Detectium 경고: ${escapeHtml(result.category)}</span>
           </span>
           <span class="risk-score">위험 지수 ${result.riskScore}%</span>
         </div>
         <button class="close-btn" title="경고 닫기" aria-label="경고 닫기">&times;</button>
       </div>
 
-      <p class="summary-text">${result.summary}</p>
-      <p class="details-text">${result.details}</p>
+      <p class="summary-text">${escapeHtml(result.summary)}</p>
+      
+      ${ocrHtml}
+
+      <p class="details-text">${escapeHtml(result.details)}</p>
 
       ${checkedTagsHtml ? `<div class="tags-container">${checkedTagsHtml}</div>` : ''}
 
       <div class="footer-bar">
         <span class="brand-sign">🔍 Detectium AI Fact-Check</span>
-        <span>OpenAI 기반 통계 왜곡 및 허위정보 자동 분석</span>
+        <span>이미지 OCR 판독 및 선동성 / 왜곡 자동 분석</span>
       </div>
     </div>
   `;

@@ -71,7 +71,8 @@ export default defineBackground(() => {
         const threshold = typeof storage.detectionThreshold === 'number' ? storage.detectionThreshold : 70;
 
         try {
-          console.log(`[Detectium] Background received ${req.posts?.length || 0} posts to analyze`);
+          const totalImages = req.posts?.reduce((acc, p) => acc + (p.imageUrls?.length || 0), 0) || 0;
+          console.log(`[Detectium] Background received ${req.posts?.length || 0} posts to analyze (총 이미지 ${totalImages}장)`);
           const results = await analyzePostsWithOpenAI(req.posts, apiKey, threshold);
           console.log(`[Detectium] OpenAI analysis complete:`, results);
           sendResponse({
