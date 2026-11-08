@@ -1,12 +1,12 @@
-import { analyzePostsWithOpenAI } from '../utils/openaiService';
-import type { AnalyzePostsRequest, AnalyzePostsResponse } from '../utils/types';
+import { analyzePostsWithOpenAI } from "../utils/openaiService";
+import type { AnalyzePostsRequest, AnalyzePostsResponse } from "../utils/types";
 
 export default defineBackground(() => {
-  console.log('[Detectium] Background Service Worker Started');
+  console.log("[Detectium] Background Service Worker Started");
 
   // 확장 프로그램 설치/업데이트 시 초기 설정 및 컨텍스트 메뉴 등록
   chrome.runtime.onInstalled.addListener(() => {
-    console.log('[Detectium] Extension installed/updated');
+    console.log("[Detectium] Extension installed/updated");
 
     // 기본 설정 초기화
     chrome.storage.sync.get(['isEnabled', 'detectionThreshold'], (result) => {
@@ -89,6 +89,8 @@ export default defineBackground(() => {
               `[Detectium][API] 요청 데이터 #${idx + 1} | ID: ${p.id} | 작성자: ${p.author} | 전체 캡션 길이: ${p.content?.length || 0}자 | 미리보기: "${(p.content || '').slice(0, 80)}..."`
             );
           });
+          const totalImages = req.posts?.reduce((acc, p) => acc + (p.imageUrls?.length || 0), 0) || 0;
+          console.log(`[Detectium] Background received ${req.posts?.length || 0} posts to analyze (총 이미지 ${totalImages}장)`);
           const results = await analyzePostsWithOpenAI(req.posts, apiKey, threshold);
           console.info('[Detectium][RESULT] 팩트체크 결과 생성 완료', {
             resultCount: results.length,

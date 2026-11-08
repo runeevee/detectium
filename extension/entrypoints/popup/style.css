@@ -17,10 +17,10 @@
 }
 
 body {
-  width: 380px;
-  max-height: 580px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  width: 640px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--bg-color);
+  border-radius: 1rem;
   color: var(--text-main);
   overflow-y: auto;
 }

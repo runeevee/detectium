@@ -1,9 +1,9 @@
-import { extractVisiblePosts, getPlatform } from '../utils/postExtractor';
-import { injectWarningBanner } from '../utils/domRenderer';
+import { extractVisiblePosts, getPlatform } from "../utils/postExtractor";
+import { injectWarningBanner } from "../utils/domRenderer";
 import type { AnalyzePostsRequest, AnalyzePostsResponse, ScannedPostItem } from '../utils/types';
 
 export default defineContentScript({
-  matches: ['*://*/*'],
+  matches: ["*://*/*"],
   runAt: 'document_idle',
   main(ctx) {
     const initializedKey = '__detectiumContentScriptInitialized';
@@ -202,8 +202,8 @@ export default defineContentScript({
       }
       console.log(`[Detectium][content.ts:scanAndAnalyzeVisiblePosts] postExtractor.ts에서 게시글 ${visibleCandidates.length}개 전달받음`);
 
-      // 너무 많은 게시글이 한 번에 스캔될 경우 최대 5개씩 배치로 처리 (속도 및 토큰 효율화)
-      const batchToProcess = visibleCandidates.slice(0, 5);
+      // 게시글 내 이미지 OCR 및 비전 분석 속도를 고려하여 3개씩 배치 처리
+      const batchToProcess = visibleCandidates.slice(0, 3);
 
       // 대상 엘리먼트들에 pending 상태 마킹
       batchToProcess.forEach(({ data, element }) => {
@@ -295,6 +295,12 @@ export default defineContentScript({
         domSelector: element.tagName.toLowerCase(),
       }));
       saveOrUpdateScannedPosts(apiSentItems);
+      const totalImagesInBatch = batchToProcess.reduce((sum, item) => sum + (item.data.imageUrls?.length || 0), 0);
+      isAnalyzing = true;
+      console.log(
+        `[Detectium] 스크롤 정지 감지: 뷰포트 내 게시글 ${batchToProcess.length}개 분석 시작 (첨부 이미지 총 ${totalImagesInBatch}장)`,
+        batchToProcess
+      );
 
       try {
         const payload: AnalyzePostsRequest = {
@@ -343,7 +349,7 @@ export default defineContentScript({
             if (el) {
               el.dataset.detectiumStatus = 'done';
 
-              // 가짜뉴스이거나 통계가 왜곡된 게시글인 경우 경고 DOM 띄우기
+              // 선동성 글, 가짜뉴스, 통계 왜곡 게시글인 경우 경고 DOM 띄우기
               if (result.isFakeOrMisleading) {
                 console.warn(`[Detectium][content.ts:injectWarningBanner] 왜곡/가짜뉴스 감지됨 (${result.category}):`, result.summary);
                 injectWarningBanner(el, result, highlightColor);

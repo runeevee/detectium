@@ -1,23 +1,41 @@
-import { defineConfig } from 'wxt';
-import dotenv from 'dotenv';
+import path from "node:path";
+import { defineConfig } from "wxt";
+import dotenv from "dotenv";
 
 dotenv.config();
 
-// See https://wxt.dev/api/config.html
 export default defineConfig({
-  modules: ['@wxt-dev/module-solid'],
-  webExt: {
-    chromiumArgs: ['--disable-features=DisableLoadExtensionCommandLineSwitch'],
-  },
+  modules: ["@wxt-dev/module-solid"],
   manifest: {
-    name: 'Detectium',
-    description: 'Detectium - SNS 통계 왜곡 및 가짜뉴스 자동 팩트체크 확장 프로그램',
-    permissions: ['storage', 'contextMenus', 'activeTab'],
-    host_permissions: ['https://api.openai.com/*'],
+    name: "Detectium",
+    description: "",
+    permissions: ["storage", "contextMenus", "activeTab"],
+    host_permissions: [
+      "https://api.openai.com/*",
+      "*://*.cdninstagram.com/*",
+      "*://*.fbcdn.net/*",
+      "*://*.twimg.com/*",
+      "*://pbs.twimg.com/*",
+      "*://*.instagram.com/*",
+      "*://*.x.com/*",
+      "*://*.twitter.com/*",
+      "<all_urls>",
+    ],
+    webExt: {
+      chromiumArgs: [
+        '--enable-blink-features=AutomationControlled',
+        '--test-type',
+    ],
   },
   vite: () => ({
     define: {
-      'process.env.OPENAI_API_KEY': JSON.stringify(process.env.OPENAI_API_KEY || ''),
+      "process.env.OPENAI_API_KEY": JSON.stringify(process.env.OPENAI_API_KEY || ""),
+    },
+    resolve: {
+      alias: {
+        "@css": path.resolve(import.meta.dirname, "./res/css"),
+        "@font": path.resolve(import.meta.dirname, "./res/font"),
+      },
     },
   }),
 });
