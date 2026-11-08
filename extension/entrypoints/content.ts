@@ -114,8 +114,8 @@ export default defineContentScript({
         return;
       }
 
-      // 너무 많은 게시글이 한 번에 스캔될 경우 최대 5개씩 배치로 처리 (속도 및 토큰 효율화)
-      const batchToProcess = visibleCandidates.slice(0, 5);
+      // 게시글 내 이미지 OCR 및 비전 분석 속도를 고려하여 3개씩 배치 처리
+      const batchToProcess = visibleCandidates.slice(0, 3);
 
       // 대상 엘리먼트들에 pending 상태 마킹
       batchToProcess.forEach(({ data, element }) => {
@@ -123,8 +123,12 @@ export default defineContentScript({
         pendingElementsMap.set(data.id, element);
       });
 
+      const totalImagesInBatch = batchToProcess.reduce((sum, item) => sum + (item.data.imageUrls?.length || 0), 0);
       isAnalyzing = true;
-      console.log(`[Detectium] 스크롤 정지 감지: 뷰포트 내 게시글 ${batchToProcess.length}개 분석 시작`, batchToProcess);
+      console.log(
+        `[Detectium] 스크롤 정지 감지: 뷰포트 내 게시글 ${batchToProcess.length}개 분석 시작 (첨부 이미지 총 ${totalImagesInBatch}장)`,
+        batchToProcess
+      );
 
       try {
         const payload: AnalyzePostsRequest = {
@@ -153,9 +157,9 @@ export default defineContentScript({
             if (el) {
               el.dataset.detectiumStatus = 'done';
 
-              // 가짜뉴스이거나 통계가 왜곡된 게시글인 경우 경고 DOM 띄우기
+              // 선동성 글, 가짜뉴스, 통계 왜곡 게시글인 경우 경고 DOM 띄우기
               if (result.isFakeOrMisleading) {
-                console.warn(`[Detectium] 왜곡/가짜뉴스 감지됨 (${result.category}):`, result.summary);
+                console.warn(`[Detectium] 선동/왜곡 게시글 감지됨 [${result.category}]:`, result.summary);
                 injectWarningBanner(el, result, highlightColor);
               }
             }
@@ -175,8 +179,8 @@ export default defineContentScript({
       } finally {
         isAnalyzing = false;
         // 남은 가시 후보가 더 있으면 다음 틱에 이어서 스캔
-        if (visibleCandidates.length > 5) {
-          setTimeout(scanAndAnalyzeVisiblePosts, 1000);
+        if (visibleCandidates.length > 3) {
+          setTimeout(scanAndAnalyzeVisiblePosts, 800);
         }
       }
     };
