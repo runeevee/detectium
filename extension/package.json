@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "openai": "^7.53.0",
-    "solid-js": "^1.9.5"
+    "solid-js": "^1.9.5",
+    "solid-transition-group": "^0.3.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

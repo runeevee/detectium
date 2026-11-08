@@ -42,8 +42,10 @@ export default () => {
   const openOptionsPage = () => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
       chrome.runtime.openOptionsPage();
+    } else if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+      chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
     } else {
-      window.open('/options.html', '_blank');
+      window.open("/options.html", "_blank");
     }
   };
 

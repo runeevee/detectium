@@ -1,9 +1,9 @@
-import { extractVisiblePosts } from '../utils/postExtractor';
-import { injectWarningBanner } from '../utils/domRenderer';
+import { extractVisiblePosts } from "../utils/postExtractor";
+import { injectWarningBanner } from "../utils/domRenderer";
 import type { AnalyzePostsRequest, AnalyzePostsResponse } from '../utils/types';
 
 export default defineContentScript({
-  matches: ['*://*/*'],
+  matches: ["*://*/*"],
   runAt: 'document_idle',
   main(ctx) {
     console.log('[Detectium] Content Script Initialized on:', window.location.href);
