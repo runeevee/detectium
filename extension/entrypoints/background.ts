@@ -1,12 +1,12 @@
-import { analyzePostsWithOpenAI } from '../utils/openaiService';
-import type { AnalyzePostsRequest, AnalyzePostsResponse } from '../utils/types';
+import { analyzePostsWithOpenAI } from "../utils/openaiService";
+import type { AnalyzePostsRequest, AnalyzePostsResponse } from "../utils/types";
 
 export default defineBackground(() => {
-  console.log('[Detectium] Background Service Worker Started');
+  console.log("[Detectium] Background Service Worker Started");
 
   // 확장 프로그램 설치/업데이트 시 초기 설정 및 컨텍스트 메뉴 등록
   chrome.runtime.onInstalled.addListener(() => {
-    console.log('[Detectium] Extension installed/updated');
+    console.log("[Detectium] Extension installed/updated");
 
     // 기본 설정 초기화
     chrome.storage.sync.get(['isEnabled', 'detectionThreshold'], (result) => {
