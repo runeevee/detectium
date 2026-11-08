@@ -56,20 +56,8 @@ export default defineBackground(() => {
     // 게시글 일괄 AI 분석 요청
     if (message.type === 'ANALYZE_POSTS_REQUEST') {
       const req = message as AnalyzePostsRequest;
-      console.info('[Detectium][MESSAGE] 분석 요청 수신', {
-        type: message.type,
-        senderUrl: sender.url,
-        postCount: req.posts?.length || 0,
-      });
 
       chrome.storage.sync.get(['isEnabled', 'apiKey', 'detectionThreshold'], async (storage) => {
-        if (chrome.runtime.lastError) {
-          const error = chrome.runtime.lastError.message || '확장 설정을 읽지 못했습니다.';
-          console.error('[Detectium][API] 설정 조회 실패:', error);
-          sendResponse({ success: false, error } as AnalyzePostsResponse);
-          return;
-        }
-
         const isEnabled = storage.isEnabled !== false;
         if (!isEnabled) {
           sendResponse({
@@ -83,25 +71,16 @@ export default defineBackground(() => {
         const threshold = typeof storage.detectionThreshold === 'number' ? storage.detectionThreshold : 70;
 
         try {
-          console.info(`[Detectium][API] 팩트체크 API 전달 시작 (${req.posts?.length || 0}개 게시글)`);
-          req.posts?.forEach((p, idx) => {
-            console.log(
-              `[Detectium][API] 요청 데이터 #${idx + 1} | ID: ${p.id} | 작성자: ${p.author} | 전체 캡션 길이: ${p.content?.length || 0}자 | 미리보기: "${(p.content || '').slice(0, 80)}..."`
-            );
-          });
           const totalImages = req.posts?.reduce((acc, p) => acc + (p.imageUrls?.length || 0), 0) || 0;
           console.log(`[Detectium] Background received ${req.posts?.length || 0} posts to analyze (총 이미지 ${totalImages}장)`);
           const results = await analyzePostsWithOpenAI(req.posts, apiKey, threshold);
-          console.info('[Detectium][RESULT] 팩트체크 결과 생성 완료', {
-            resultCount: results.length,
-            results,
-          });
+          console.log(`[Detectium] OpenAI analysis complete:`, results);
           sendResponse({
             success: true,
             results,
           } as AnalyzePostsResponse);
         } catch (error: any) {
-          console.error('[Detectium][API] 팩트체크 분석 실패:', error);
+          console.error('[Detectium] Analysis error in background:', error);
           sendResponse({
             success: false,
             error: error?.message || '분석 중 알 수 없는 오류가 발생했습니다.',

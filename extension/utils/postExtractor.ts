@@ -1,17 +1,5 @@
 import type { PostData } from './types';
 
-export const wait = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-export function cleanPostText(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/(\.{2,}|…)?\s*(더\s*보기|자세히\s*보기|more|show\s*more|read\s*more)\s*$/gi, '')
-    .replace(/[^\S\r\n]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
 // 플랫폼 판별
 export function getPlatform(): 'x' | 'instagram' | 'generic' {
   const host = window.location.hostname;
@@ -30,7 +18,8 @@ export function isElementInViewport(el: Element): boolean {
   const windowHeight = window.innerHeight || document.documentElement.clientHeight;
   const windowWidth = window.innerWidth || document.documentElement.clientWidth;
 
-  const isVisibleY = rect.bottom > 40 && rect.top < windowHeight - 40;
+  // 세로축으로 최소 40px 이상 보이고 가로축도 화면 안에 걸쳐있는지 확인
+  const isVisibleY = rect.bottom > 40 && rect.top < (windowHeight - 40);
   const isVisibleX = rect.right > 0 && rect.left < windowWidth;
 
   return isVisibleY && isVisibleX && rect.height > 20 && rect.width > 50;
@@ -168,9 +157,11 @@ function extractGenericImageUrls(article: HTMLElement): string[] {
 
 // X (구 Twitter) 게시글 추출
 function extractXPost(article: HTMLElement): { data: PostData; element: HTMLElement } | null {
+  // 작성자 정보
   const userNameEl = article.querySelector('[data-testid="User-Name"]');
   const author = userNameEl ? (userNameEl.textContent || '').replace(/\s+/g, ' ').trim() : '알 수 없음';
 
+  // 본문 텍스트
   const textEl = article.querySelector('[data-testid="tweetText"]');
   const content = textEl ? (textEl.textContent || '').trim() : '';
 
@@ -187,8 +178,14 @@ function extractXPost(article: HTMLElement): { data: PostData; element: HTMLElem
     }
   });
 
+  // 링크 카드 (뉴스 기사 미리보기 등)
   const cardDetail = article.querySelector('[data-testid*="card"]');
-  const cardText = cardDetail ? (cardDetail.textContent || '').replace(/\s+/g, ' ').trim() : '';
+  let cardText = '';
+  if (cardDetail) {
+    cardText = (cardDetail.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  // 결합된 미디어 정보
   const combinedMedia = [
     mediaAlts.length > 0 ? `[이미지 설명]: ${mediaAlts.join('; ')}` : '',
     cardText ? `[첨부 카드/기사]: ${cardText}` : '',
@@ -202,6 +199,8 @@ function extractXPost(article: HTMLElement): { data: PostData; element: HTMLElem
     return null;
   }
 
+  // 트윗 고유 ID
+  let tweetId = '';
   const statusLink = article.querySelector<HTMLAnchorElement>('a[href*="/status/"]');
   if (statusLink) {
     const match = statusLink.href.match(/\/status\/(\d+)/);
@@ -230,159 +229,11 @@ function extractXPost(article: HTMLElement): { data: PostData; element: HTMLElem
   };
 }
 
-function findInstagramCaption(article: HTMLElement, author: string): HTMLElement | null {
-  const header = article.querySelector('header');
-  const candidates = Array.from(
-    article.querySelectorAll<HTMLElement>('h1, div._a9zs, span[dir="auto"]')
-  ).filter((candidate) => {
-    if (header?.contains(candidate) || candidate.closest('ul, button, [role="button"]')) {
-      return false;
-    }
-
-    const text = (candidate.innerText || candidate.textContent || '').trim();
-    return text.length > 0 && text !== author && text !== `@${author}`;
-  });
-
-  return (
-    candidates.find((candidate) => candidate.matches('h1')) ||
-    candidates.find((candidate) => candidate.matches('div._a9zs')) ||
-    candidates.sort((a, b) => (b.innerText || b.textContent || '').length - (a.innerText || a.textContent || '').length)[0] ||
-    null
-  );
-}
-
-export function extractInstagramAuthor(article: HTMLElement): string {
-  const header = article.querySelector('header');
-  const authorLink = header?.querySelector<HTMLAnchorElement>('a[href]');
-  return (authorLink?.textContent || '').trim();
-}
-
-export function findInstagramCaptionContainer(article: HTMLElement, author: string): HTMLElement | null {
-  return findInstagramCaption(article, author);
-}
-
-function isClickableMoreButton(element: HTMLElement): boolean {
-  if (!element.isConnected || element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true') {
-    return false;
-  }
-  if (element instanceof HTMLButtonElement && element.disabled) {
-    return false;
-  }
-
-  const isMoreLabel = (label: string): boolean =>
-    /^(?:\.{2,}\s*)?(?:더\s*보기|자세히\s*보기|more|show\s*more|read\s*more)$/i.test(
-      label.replace(/…/g, '...').trim()
-    );
-  const labels = [
-    element.innerText || '',
-    element.textContent || '',
-    element.getAttribute('aria-label') || '',
-  ];
-  if (!labels.some(isMoreLabel)) {
-    return false;
-  }
-
-  const style = window.getComputedStyle(element);
-  const rect = element.getBoundingClientRect();
-  return (
-    (element.matches('button, [role="button"], a') || style.cursor === 'pointer') &&
-    style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    style.pointerEvents !== 'none' &&
-    Number.parseFloat(style.opacity || '1') > 0 &&
-    rect.width > 0 &&
-    rect.height > 0
-  );
-}
-
-const expandedInstagramPosts = new WeakSet<HTMLElement>();
-
-async function expandInstagramCaption(article: HTMLElement, author: string): Promise<boolean> {
-  if (expandedInstagramPosts.has(article)) {
-    return false;
-  }
-
-  const caption = findInstagramCaption(article, author);
-  if (!caption) {
-    return false;
-  }
-
-  const captionScope = caption.closest<HTMLElement>('div._a9zs') || caption.parentElement;
-  if (!captionScope || captionScope === article || !article.contains(captionScope) || captionScope.closest('ul')) {
-    return false;
-  }
-
-  const candidates = [
-    ...(captionScope.matches('button, [role="button"], a, span')
-      ? [captionScope]
-      : []),
-    ...Array.from(captionScope.querySelectorAll<HTMLElement>('button, [role="button"], a, span')),
-  ];
-  const moreButton = candidates.find(
-    (candidate) =>
-      !candidate.closest('ul, header') &&
-      captionScope.contains(candidate) &&
-      isClickableMoreButton(candidate)
-  );
-  if (!moreButton) {
-    return false;
-  }
-
-  expandedInstagramPosts.add(article);
-  moreButton.click();
-  await wait(100);
-  return true;
-}
-
-function extractInstagramCaption(caption: HTMLElement, article: HTMLElement, author: string): string {
-  const copy = caption.cloneNode(true) as HTMLElement;
-  copy.querySelectorAll('button, [role="button"], a[role="button"]').forEach((element) => element.remove());
-
-  const header = article.querySelector('header');
-  const authorLinks = Array.from(header?.querySelectorAll<HTMLAnchorElement>('a[href]') || []);
-  const authorHrefs = new Set(authorLinks.map((link) => link.getAttribute('href')));
-  copy.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((link) => {
-    const linkText = (link.innerText || link.textContent || '').trim();
-    if (authorHrefs.has(link.getAttribute('href')) || linkText === author || linkText === `@${author}`) {
-      link.remove();
-    }
-  });
-
-  return (copy.innerText || copy.textContent || '').trim();
-}
-
-export function extractCleanCaptionText(caption: HTMLElement, author: string): string {
-  const article = caption.closest<HTMLElement>('article') || caption.parentElement || caption;
-  return extractInstagramCaption(caption, article, author);
-}
-
-export async function expandInstagramPost(article: HTMLElement): Promise<boolean> {
-  return expandInstagramCaption(article, extractInstagramAuthor(article));
-}
-
-export async function expandYouTubePost(container: HTMLElement): Promise<boolean> {
-  const candidates = Array.from(
-    container.querySelectorAll<HTMLElement>('button, [role="button"], tp-yt-paper-button, #expand, #more')
-  );
-  const moreButton = candidates.find((candidate) => {
-    const label = (candidate.innerText || candidate.textContent || '').trim();
-    return /^(?:\.{2,}\s*)?(?:more|show more|read more)$/i.test(label) && isClickableMoreButton(candidate);
-  });
-  if (!moreButton) {
-    return false;
-  }
-
-  moreButton.click();
-  await wait(250);
-  return true;
-}
-
 // Instagram 피드/게시글 추출
 function extractInstagramPost(article: HTMLElement): { data: PostData; element: HTMLElement } | null {
+  // 작성자 헤더
   const headerAuthorEl = article.querySelector('header a, a[role="link"]');
   const author = headerAuthorEl ? (headerAuthorEl.textContent || '').trim() : '인스타그램 작성자';
-  const caption = findInstagramCaption(article, author);
-  const content = caption ? extractInstagramCaption(caption, article, author) : '';
 
   // 캡션 본문 (인스타그램 상세 뷰의 h1, 혹은 캡션 텍스트 블록)
   const captionEl = article.querySelector('h1, div._a9zs, span[dir="auto"]');
@@ -413,6 +264,8 @@ function extractInstagramPost(article: HTMLElement): { data: PostData; element: 
     return null;
   }
 
+  // 게시글 고유 URL / ID
+  let postId = '';
   const postLink = article.querySelector<HTMLAnchorElement>('a[href*="/p/"], a[href*="/reel/"]');
   if (postLink) {
     const match = postLink.href.match(/\/(p|reel)\/([a-zA-Z0-9_-]+)/);
@@ -436,7 +289,6 @@ function extractInstagramPost(article: HTMLElement): { data: PostData; element: 
       mediaDescription: combinedMedia,
       imageUrls,
       url: postLink ? postLink.href : undefined,
-      shortcode,
     },
     element: article,
   };
@@ -468,20 +320,19 @@ function extractGenericPost(article: HTMLElement): { data: PostData; element: HT
 }
 
 // 현재 페이지에서 가시 영역에 있는 후보 게시글 요소들을 탐색하여 구조화
-export async function extractVisiblePosts(
-  forceRescan = false
-): Promise<Array<{ data: PostData; element: HTMLElement }>> {
+export function extractVisiblePosts(): Array<{ data: PostData; element: HTMLElement }> {
   const platform = getPlatform();
   const extracted: Array<{ data: PostData; element: HTMLElement }> = [];
+
   let candidateElements: NodeListOf<HTMLElement>;
 
   if (platform === 'x') {
     candidateElements = document.querySelectorAll<HTMLElement>('article[data-testid="tweet"]');
   } else if (platform === 'instagram') {
-    candidateElements = document.querySelectorAll<HTMLElement>(
-      'article, main article, div[role="presentation"] > div > article'
-    );
+    // 인스타그램 메인 피드 및 상세 뷰의 게시글 article
+    candidateElements = document.querySelectorAll<HTMLElement>('article, main article, div[role="presentation"] > div > article');
     if (candidateElements.length === 0) {
+      // 일부 인스타그램 뷰 대응
       candidateElements = document.querySelectorAll<HTMLElement>('main div[style*="flex-direction: column"] > div');
     }
   } else {
@@ -518,14 +369,11 @@ export async function extractVisiblePosts(
 
     let parsed: { data: PostData; element: HTMLElement } | null = null;
     if (platform === 'x') {
-      parsed = extractXPost(element);
+      parsed = extractXPost(el);
     } else if (platform === 'instagram') {
-      const authorElement = element.querySelector('header a, a[role="link"]');
-      const author = authorElement ? (authorElement.textContent || '').trim() : '인스타그램 작성자';
-      await expandInstagramCaption(element, author);
-      parsed = extractInstagramPost(element);
+      parsed = extractInstagramPost(el);
     } else {
-      parsed = extractGenericPost(element);
+      parsed = extractGenericPost(el);
     }
 
     // 본문 내용이 있거나, 첨부 이미지가 있거나, 미디어 설명이 있는 경우 분석 대상에 포함
@@ -537,7 +385,7 @@ export async function extractVisiblePosts(
     ) {
       extracted.push(parsed);
     }
-  }
+  });
 
   return extracted;
 }
