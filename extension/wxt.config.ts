@@ -25,7 +25,8 @@ export default defineConfig({
       chromiumArgs: [
         '--enable-blink-features=AutomationControlled',
         '--test-type',
-    ],
+      ],
+    },
   },
   vite: () => ({
     define: {
