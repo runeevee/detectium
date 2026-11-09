@@ -76,15 +76,53 @@ export async function analyzePostsWithOpenAI(
     return [];
   }
 
+  // 캡션이 빈 문자열이거나 작성자 계정명만 포함되어 있는 게시글은 API 전송에서 제외 (요구사항 6)
+  const validPosts = posts.filter((p) => {
+    const trimmedContent = (p.content || '').trim();
+    const trimmedAuthor = (p.author || '').trim();
+    const hasImages = Boolean(p.imageUrls && p.imageUrls.length > 0);
+
+    if (p.platform === 'instagram' && !trimmedContent) {
+      console.warn(`[Detectium][openaiService.ts:analyzePostsWithOpenAI] 인스타그램 캡션이 비어 있어 제외됨 (ID: ${p.id})`);
+      return false;
+    }
+    // 본문이 없더라도 이미지(카드뉴스 등)가 있으면 OCR 분석 대상으로 유지
+    if (!trimmedContent && !hasImages && (!p.mediaDescription || p.mediaDescription.length < 10)) {
+      console.warn(`[Detectium][openaiService.ts:analyzePostsWithOpenAI] 본문이 없어 제외됨 (ID: ${p.id})`);
+      return false;
+    }
+    if (
+      trimmedContent &&
+      trimmedAuthor &&
+      (trimmedContent === trimmedAuthor ||
+        trimmedContent.replace(/[@\s]/g, '') === trimmedAuthor.replace(/[@\s]/g, ''))
+    ) {
+      console.warn(`[Detectium][openaiService.ts:analyzePostsWithOpenAI] 작성자 계정명만 포함되어 제외됨 (ID: ${p.id})`);
+      return false;
+    }
+    return true;
+  });
+
+  if (validPosts.length === 0) {
+    console.log('[Detectium][openaiService.ts:analyzePostsWithOpenAI] 유효한 검증 대상 게시글이 없어 API 호출 생략');
+    return [];
+  }
+
+  validPosts.forEach((p, idx) => {
+    console.log(
+      `[Detectium][openaiService.ts:analyzePostsWithOpenAI #${idx + 1}] ID: ${p.id} | 작성자: ${p.author} | 캡션 길이: ${p.content?.length || 0}자 | 미리보기: "${(p.content || '').slice(0, 100)}..."`
+    );
+  });
+
   const client = new OpenAI({
     apiKey: effectiveKey,
     // 브라우저 확장 프로그램 서비스 워커 환경 지원
     dangerouslyAllowBrowser: true,
   });
 
-  // 각 게시글에 포함된 이미지들을 Base64로 병렬 변환 (실패 시 원본 URL 폴백)
+  // 필터링을 통과한 게시글의 이미지들을 Base64로 병렬 변환 (실패 시 원본 URL 폴백)
   const postsWithImages = await Promise.all(
-    posts.map(async (p) => {
+    validPosts.map(async (p) => {
       let imagesBase64: string[] = [];
       if (p.imageUrls && p.imageUrls.length > 0) {
         // 게시글당 최대 5장의 이미지 변환 (대부분의 카드뉴스는 3~5장 내외)
