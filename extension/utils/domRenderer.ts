@@ -1,33 +1,32 @@
-import type { AnalysisResult } from './types';
+import type { AnalysisResult } from "./types";
 
 function escapeHtml(str: string): string {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 export function injectWarningBanner(
   targetElement: HTMLElement,
   result: AnalysisResult,
-  themeColor: string = '#4f46e5'
+  _highlightColor?: string
 ) {
   // 이미 경고창이 삽입되어 있는지 확인
-  if (targetElement.querySelector('.detectium-overlay-host')) {
+  if (targetElement.querySelector(".detectium-overlay-host")) {
     return;
   }
 
-  // 게시글 컨테이너가 position: static이면 relative로 변경 (overlay 위치 기준)
+  // 게시글 컨테이너가 position: static이면 relative로 변경
   const currentPosition = window.getComputedStyle(targetElement).position;
-  if (currentPosition === 'static') {
-    targetElement.style.position = 'relative';
+  if (currentPosition === "static") {
+    targetElement.style.position = "relative";
   }
 
-  // 오버레이 호스트 (Shadow DOM)
-  const host = document.createElement('div');
-  host.className = 'detectium-overlay-host';
+  const host = document.createElement("div");
+  host.className = "detectium-overlay-host";
   host.style.cssText = `
     position: absolute;
     top: 0;
@@ -40,21 +39,16 @@ export function injectWarningBanner(
     pointer-events: auto;
   `;
 
-  const shadow = host.attachShadow({ mode: 'open' });
+  const shadow = host.attachShadow({ mode: "open" });
 
-  // Category info
-  const isAgitation = result.category.includes('선동');
-  const isStatDistortion = result.category.includes('통계');
+  const isAgitation = result.category.includes("선동");
+  const isStatDistortion = result.category.includes("통계");
 
-  let categoryIcon = '🚨';
-  let alertColor = '#ef4444';
-
+  let categoryIcon = "🚨";
   if (isAgitation) {
-    categoryIcon = '📢';
-    alertColor = '#f97316';
+    categoryIcon = "📢";
   } else if (isStatDistortion) {
-    categoryIcon = '📊';
-    alertColor = '#f59e0b';
+    categoryIcon = "📊";
   }
 
   shadow.innerHTML = `
@@ -68,7 +62,7 @@ export function injectWarningBanner(
         position: absolute;
         top: 0; left: 0; right: 0; bottom: 0;
         width: 100%; height: 100%;
-        background: rgba(185, 28, 28, 0.82);
+        background: rgba(185, 28, 28, 0.85);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -106,14 +100,6 @@ export function injectWarningBanner(
         border-radius: 20px;
         letter-spacing: -0.01em;
       }
-      .risk-badge {
-        background: rgba(0,0,0,0.4);
-        color: #fca5a5;
-        font-size: 12px;
-        font-weight: 600;
-        padding: 2px 8px;
-        border-radius: 10px;
-      }
       .show-anyway-btn {
         margin-top: 4px;
         background: rgba(255,255,255,0.15);
@@ -149,9 +135,8 @@ export function injectWarningBanner(
     </div>
   `;
 
-  // "그래도 보기" 클릭 시 오버레이 제거
-  const btn = shadow.querySelector('.show-anyway-btn');
-  btn?.addEventListener('click', () => {
+  const btn = shadow.querySelector(".show-anyway-btn");
+  btn?.addEventListener("click", () => {
     host.remove();
   });
 

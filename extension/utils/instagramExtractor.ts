@@ -1,16 +1,15 @@
-import type { PostData } from './types';
-import { wait, generateSimpleHash, isElementInViewport } from './postExtractor';
+import type { PostData } from "./types";
+import { wait, generateSimpleHash, isElementInViewport } from "./postExtractor";
 
-// ---------------------------------------------------------------------------
-// Instagram 이미지 URL 추출
-// ---------------------------------------------------------------------------
-
+/**
+ * 인스타그램 단일 게시글 속 모든 이미지의 URL을 반환합니다.
+ */
 export function extractInstagramImageUrls(article: HTMLElement): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
 
   // 인스타그램 게시글 내 모든 이미지 탐색
-  const imgElements = article.querySelectorAll<HTMLImageElement>('img');
+  const imgElements = article.querySelectorAll<HTMLImageElement>("img");
   imgElements.forEach((img) => {
     // 프로필 사진 및 헤더 아바타 제외
     if (img.closest('header')) return;
@@ -64,7 +63,6 @@ export function extractInstagramImageUrls(article: HTMLElement): string[] {
 // ---------------------------------------------------------------------------
 // Instagram 캡션 찾기
 // ---------------------------------------------------------------------------
-
 function findInstagramCaption(article: HTMLElement, author: string): HTMLElement | null {
   const header = article.querySelector('header');
   const candidates = Array.from(
@@ -240,7 +238,6 @@ function resolveInstagramAuthor(article: HTMLElement): string {
 // ---------------------------------------------------------------------------
 // Instagram 게시글 추출 (단일 article)
 // ---------------------------------------------------------------------------
-
 export function extractInstagramPost(article: HTMLElement): { data: PostData; element: HTMLElement } | null {
   const author = resolveInstagramAuthor(article);
 
