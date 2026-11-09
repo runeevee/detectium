@@ -488,7 +488,7 @@ export default defineContentScript({
       // 사용자가 스크롤을 멈췄을 때 (650ms 동안 추가 스크롤이 없을 때)
       scrollStopTimer = setTimeout(() => {
         void scanAndAnalyzeVisiblePosts(false);
-      }, 650);
+      }, 3000);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });

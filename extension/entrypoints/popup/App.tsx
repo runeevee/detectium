@@ -3,14 +3,16 @@ import type { ScannedPostItem } from '../../utils/types';
 import css from "./popup.module.css";
 
 import {
-  expandInstagramPost as expandInstagramPostImpl,
   cleanPostText as cleanPostTextImpl,
   wait as waitImpl,
   expandYouTubePost as expandYouTubePostImpl,
+} from '../../utils/postExtractor';
+import {
+  expandInstagramPost as expandInstagramPostImpl,
   extractInstagramAuthor,
   findInstagramCaptionContainer,
   extractCleanCaptionText,
-} from '../../utils/postExtractor';
+} from '../../utils/instagramExtractor';
 
 interface ContentScriptResponse {
   status?: string;

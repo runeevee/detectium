@@ -15,78 +15,47 @@ export function injectWarningBanner(
   themeColor: string = '#4f46e5'
 ) {
   // 이미 경고창이 삽입되어 있는지 확인
-  const existingContainer = targetElement.querySelector('.detectium-warning-host');
-  if (existingContainer) {
+  if (targetElement.querySelector('.detectium-overlay-host')) {
     return;
   }
 
-  // 래퍼 컨테이너 생성
+  // 게시글 컨테이너가 position: static이면 relative로 변경 (overlay 위치 기준)
+  const currentPosition = window.getComputedStyle(targetElement).position;
+  if (currentPosition === 'static') {
+    targetElement.style.position = 'relative';
+  }
+
+  // 오버레이 호스트 (Shadow DOM)
   const host = document.createElement('div');
-  host.className = 'detectium-warning-host';
+  host.className = 'detectium-overlay-host';
   host.style.cssText = `
-    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
-    margin-top: 10px;
-    margin-bottom: 8px;
-    clear: both;
-    position: relative;
-    z-index: 20;
+    height: 100%;
+    z-index: 100;
+    pointer-events: auto;
   `;
 
-  // Shadow DOM 부착으로 외부 사이트(X, 인스타그램)의 CSS 충돌 완벽 방지
   const shadow = host.attachShadow({ mode: 'open' });
 
-  // 카테고리별 테마 색상 및 아이콘 설정
+  // Category info
   const isAgitation = result.category.includes('선동');
   const isStatDistortion = result.category.includes('통계');
 
   let categoryIcon = '🚨';
-  let alertColor = '#ef4444'; // Red (가짜뉴스/허위사실)
-  let alertBg = 'rgba(239, 68, 68, 0.08)';
-  let alertBorder = 'rgba(239, 68, 68, 0.35)';
+  let alertColor = '#ef4444';
 
   if (isAgitation) {
-    categoryIcon = '📢'; // 확성기 (선동성 게시글)
-    alertColor = '#f97316'; // Orange
-    alertBg = 'rgba(249, 115, 22, 0.1)';
-    alertBorder = 'rgba(249, 115, 22, 0.4)';
+    categoryIcon = '📢';
+    alertColor = '#f97316';
   } else if (isStatDistortion) {
-    categoryIcon = '📊'; // 통계 왜곡
-    alertColor = '#f59e0b'; // Amber
-    alertBg = 'rgba(245, 158, 11, 0.08)';
-    alertBorder = 'rgba(245, 158, 11, 0.35)';
+    categoryIcon = '📊';
+    alertColor = '#f59e0b';
   }
-
-  const checkedTagsHtml = (result.checkedPoints || [])
-    .map(
-      (tag) => `
-      <span style="
-        display: inline-block;
-        background: rgba(255, 255, 255, 0.08);
-        color: #e2e8f0;
-        padding: 2px 8px;
-        border-radius: 9999px;
-        font-size: 11px;
-        font-weight: 500;
-        margin-right: 4px;
-        margin-bottom: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-      "># ${escapeHtml(tag)}</span>
-    `
-    )
-    .join('');
-
-  const ocrHtml =
-    result.extractedImageText &&
-    result.extractedImageText.trim() &&
-    result.extractedImageText !== '이미지 내 텍스트 없음'
-      ? `
-      <div class="ocr-section">
-        <div class="ocr-title">🖼️ 이미지 추출 텍스트 (OCR 판독)</div>
-        <div class="ocr-content">${escapeHtml(result.extractedImageText)}</div>
-      </div>
-    `
-      : '';
 
   shadow.innerHTML = `
     <style>
@@ -95,175 +64,96 @@ export function injectWarningBanner(
         display: block;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       }
-      .warning-card {
-        background: #0f172a;
-        background: linear-gradient(145deg, #131b2e, #0b1120);
-        border: 1.5px solid ${alertBorder};
-        border-left: 5px solid ${alertColor};
-        border-radius: 12px;
-        padding: 14px 16px;
-        color: #f1f5f9;
-        box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.3);
-        animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      .overlay {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        width: 100%; height: 100%;
+        background: rgba(185, 28, 28, 0.82);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 20px;
         box-sizing: border-box;
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
       }
-      @keyframes slideDown {
-        from {
-          opacity: 0;
-          transform: translateY(-8px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+      .warning-icon {
+        font-size: 40px;
+        line-height: 1;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
       }
-      .card-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 8px;
+      .warning-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #fff;
+        text-align: center;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        line-height: 1.4;
+        max-width: 300px;
       }
-      .badge-group {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-      .category-pill {
+      .warning-category {
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        background: ${alertBg};
-        color: ${alertColor};
-        border: 1px solid ${alertBorder};
+        background: rgba(0,0,0,0.3);
+        color: #fecaca;
+        border: 1px solid rgba(255,255,255,0.3);
         font-size: 12px;
         font-weight: 700;
-        padding: 3px 9px;
-        border-radius: 6px;
+        padding: 3px 10px;
+        border-radius: 20px;
         letter-spacing: -0.01em;
       }
-      .risk-score {
-        background: rgba(239, 68, 68, 0.15);
+      .risk-badge {
+        background: rgba(0,0,0,0.4);
         color: #fca5a5;
-        font-size: 11px;
-        font-weight: 600;
-        padding: 2px 7px;
-        border-radius: 6px;
-      }
-      .close-btn {
-        background: transparent;
-        border: none;
-        color: #94a3b8;
-        cursor: pointer;
-        padding: 2px 6px;
-        font-size: 18px;
-        line-height: 1;
-        border-radius: 4px;
-        transition: color 0.15s, background 0.15s;
-      }
-      .close-btn:hover {
-        color: #f8fafc;
-        background: rgba(255, 255, 255, 0.1);
-      }
-      .summary-text {
-        font-size: 13.5px;
-        font-weight: 600;
-        line-height: 1.45;
-        color: #f8fafc;
-        margin: 0 0 6px 0;
-        word-break: break-word;
-      }
-      .details-text {
-        font-size: 12.5px;
-        line-height: 1.5;
-        color: #cbd5e1;
-        margin: 0 0 10px 0;
-        word-break: break-word;
-      }
-      .ocr-section {
-        background: rgba(0, 0, 0, 0.35);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-left: 3px solid ${alertColor};
-        border-radius: 6px;
-        padding: 8px 12px;
-        margin-bottom: 10px;
-      }
-      .ocr-title {
-        font-size: 11px;
-        font-weight: 700;
-        color: #94a3b8;
-        margin-bottom: 4px;
-        letter-spacing: 0.02em;
-      }
-      .ocr-content {
         font-size: 12px;
-        color: #e2e8f0;
-        line-height: 1.45;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 120px;
-        overflow-y: auto;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
       }
-      .tags-container {
-        display: flex;
-        flex-wrap: wrap;
-        margin-bottom: 8px;
-      }
-      .footer-bar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
-        padding-top: 8px;
+      .show-anyway-btn {
         margin-top: 4px;
-        font-size: 11px;
-        color: #64748b;
+        background: rgba(255,255,255,0.15);
+        color: #fff;
+        border: 1.5px solid rgba(255,255,255,0.5);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 20px;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+        font-family: inherit;
       }
-      .brand-sign {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-weight: 500;
-        color: #94a3b8;
+      .show-anyway-btn:hover {
+        background: rgba(255,255,255,0.28);
+        border-color: rgba(255,255,255,0.8);
+      }
+      .summary-preview {
+        font-size: 12px;
+        color: rgba(255,255,255,0.85);
+        text-align: center;
+        max-width: 280px;
+        line-height: 1.4;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.4);
       }
     </style>
-    <div class="warning-card">
-      <div class="card-header">
-        <div class="badge-group">
-          <span class="category-pill">
-            <span>${categoryIcon}</span>
-            <span>Detectium 경고: ${escapeHtml(result.category)}</span>
-          </span>
-          <span class="risk-score">위험 지수 ${result.riskScore}%</span>
-        </div>
-        <button class="close-btn" title="경고 닫기" aria-label="경고 닫기">&times;</button>
-      </div>
-
-      <p class="summary-text">${escapeHtml(result.summary)}</p>
-      
-      ${ocrHtml}
-
-      <p class="details-text">${escapeHtml(result.details)}</p>
-
-      ${checkedTagsHtml ? `<div class="tags-container">${checkedTagsHtml}</div>` : ''}
-
-      <div class="footer-bar">
-        <span class="brand-sign">🔍 Detectium AI Fact-Check</span>
-        <span>이미지 OCR 판독 및 선동성 / 왜곡 자동 분석</span>
-      </div>
+    <div class="overlay">
+      <div class="warning-icon">${categoryIcon}</div>
+      <div class="warning-title">⚠️ 경고: ${escapeHtml(result.category)}</div>
+      <div class="warning-category">${categoryIcon} Detectium AI 판별 · 위험도 ${result.riskScore}%</div>
+      <div class="summary-preview">${escapeHtml(result.summary)}</div>
+      <button class="show-anyway-btn">그래도 보기</button>
     </div>
   `;
 
-  // 닫기 버튼 이벤트
-  const closeBtn = shadow.querySelector('.close-btn');
-  closeBtn?.addEventListener('click', () => {
-    host.style.transition = 'all 0.2s ease-out';
-    host.style.opacity = '0';
-    host.style.transform = 'scaleY(0)';
-    setTimeout(() => host.remove(), 200);
+  // "그래도 보기" 클릭 시 오버레이 제거
+  const btn = shadow.querySelector('.show-anyway-btn');
+  btn?.addEventListener('click', () => {
+    host.remove();
   });
 
-  // 게시글 요소의 최하단에 자연스럽게 삽입
   targetElement.appendChild(host);
 }
