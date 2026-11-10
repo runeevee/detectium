@@ -34,8 +34,8 @@ export function generateSimpleHash(str: string): string {
 export function isClickableMoreButton(element: HTMLElement): boolean {
   if (
     !element.isConnected ||
-    element.hasAttribute('disabled') ||
-    element.getAttribute('aria-disabled') === 'true'
+    element.hasAttribute("disabled") ||
+    element.getAttribute("aria-disabled") === "true"
   ) {
     return false;
   }
@@ -45,12 +45,12 @@ export function isClickableMoreButton(element: HTMLElement): boolean {
 
   const isMoreLabel = (label: string): boolean =>
     /^(?:\.{2,}\s*)?(?:더\s*보기|자세히\s*보기|more|show\s*more|read\s*more)$/i.test(
-      label.replace(/…/g, '...').trim()
+      label.replace(/…/g, "...").trim()
     );
   const labels = [
-    element.innerText || '',
-    element.textContent || '',
-    element.getAttribute('aria-label') || '',
+    element.innerText || "",
+    element.textContent || "",
+    element.getAttribute("aria-label") || "",
   ];
   if (!labels.some(isMoreLabel)) {
     return false;
@@ -59,12 +59,12 @@ export function isClickableMoreButton(element: HTMLElement): boolean {
   const style = window.getComputedStyle(element);
   const rect = element.getBoundingClientRect();
   return (
-    (element.matches('button, [role="button"], a, tp-yt-paper-button, #expand, #more') ||
-      style.cursor === 'pointer') &&
-    style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    style.pointerEvents !== 'none' &&
-    Number.parseFloat(style.opacity || '1') > 0 &&
+    (element.matches("button, [role=\"button\"], a, tp-yt-paper-button, #expand, #more") ||
+      style.cursor === "pointer") &&
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    style.pointerEvents !== "none" &&
+    Number.parseFloat(style.opacity || "1") > 0 &&
     rect.width > 0 &&
     rect.height > 0
   );

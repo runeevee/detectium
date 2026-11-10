@@ -44,10 +44,6 @@ export function injectWarningBanner(
 
   const shadow = host.attachShadow({ mode: "open" });
 
-  const isAgitation = result.category.includes("선동");
-  const isStatDistortion = result.category.includes("통계");
-  const categoryIcon = isAgitation ? "📢" : isStatDistortion ? "📊" : "🚨";
-
   shadow.innerHTML = `
     <style>
       :host {
@@ -70,33 +66,6 @@ export function injectWarningBanner(
         backdrop-filter: blur(2px);
         -webkit-backdrop-filter: blur(2px);
       }
-      .warning-icon {
-        font-size: 40px;
-        line-height: 1;
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
-      }
-      .warning-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: #fff;
-        text-align: center;
-        text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-        line-height: 1.4;
-        max-width: 300px;
-      }
-      .warning-category {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        background: rgba(0,0,0,0.3);
-        color: #fecaca;
-        border: 1px solid rgba(255,255,255,0.3);
-        font-size: 12px;
-        font-weight: 700;
-        padding: 3px 10px;
-        border-radius: 20px;
-        letter-spacing: -0.01em;
-      }
       .show-anyway-btn {
         margin-top: 4px;
         background: rgba(255,255,255,0.15);
@@ -114,17 +83,21 @@ export function injectWarningBanner(
         background: rgba(255,255,255,0.28);
         border-color: rgba(255,255,255,0.8);
       }
-      .summary-preview {
+      .details-preview {
         font-size: 1rem;
         color: rgba(255,255,255,0.85);
         text-align: center;
         max-width: 280px;
+        max-height: 60%;
+        overflow-y: auto;
         line-height: 1.4;
         text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
       }
     </style>
     <div class="overlay">
-      <div class="summary-preview">${escapeHtml(result.summary)}</div>
+      <div class="details-preview">${escapeHtml(result.details)}</div>
       <button class="show-anyway-btn">해당 사실을 인지하고 있으며, 계속 보겠습니다.</button>
     </div>
   `;

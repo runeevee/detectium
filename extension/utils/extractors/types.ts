@@ -1,4 +1,4 @@
-import type { PostData } from '../types';
+import type { PostData } from "../types";
 
 export interface ExtractedPost {
   data: PostData;
@@ -6,7 +6,7 @@ export interface ExtractedPost {
 }
 
 export interface PostExtractor {
-  readonly platform: PostData['platform'];
+  readonly platform: PostData["platform"];
   canHandle(hostname: string): boolean;
   extractPost(element: HTMLElement): ExtractedPost | null;
   extractVisiblePosts(forceRescan?: boolean): Promise<ExtractedPost[]>;

@@ -19,21 +19,26 @@ export default defineContentScript({
     const BATCH_SIZE = 3;
     const MAX_STORED_POSTS = 25;
     const BACKGROUND_TIMEOUT_MS = 90_000;
+    const DEFAULT_DETECTION_THRESHOLD = 50;
 
     let isExtensionActive = true;
     let highlightColor = "#4f46e5";
+    let detectionThreshold = DEFAULT_DETECTION_THRESHOLD;
 
     // 진행 중인 분석 요청 관리
     const pendingElementsMap = new Map<string, HTMLElement>();
 
     // 스토리지 설정 동기화
     const syncSettings = () => {
-      chrome.storage.sync.get(["isEnabled", "highlightColor"], (result) => {
+      chrome.storage.sync.get(["isEnabled", "highlightColor", "detectionThreshold"], (result) => {
         if (typeof result.isEnabled === "boolean") {
           isExtensionActive = result.isEnabled;
         }
         if (typeof result.highlightColor === "string") {
           highlightColor = result.highlightColor;
+        }
+        if (typeof result.detectionThreshold === "number") {
+          detectionThreshold = result.detectionThreshold;
         }
       });
     };
@@ -47,6 +52,9 @@ export default defineContentScript({
         }
         if (changes.highlightColor && typeof changes.highlightColor.newValue === "string") {
           highlightColor = changes.highlightColor.newValue;
+        }
+        if (changes.detectionThreshold && typeof changes.detectionThreshold.newValue === "number") {
+          detectionThreshold = changes.detectionThreshold.newValue;
         }
       }
     });
@@ -193,7 +201,7 @@ export default defineContentScript({
       const trimmedContent = data.content.trim();
       const trimmedAuthor = (data.author || "").trim();
 
-      if (data.platform === "instagram" && trimmedContent.length === 0) {
+      if (data.platform === "instagram" && trimmedContent.length === 0 && !data.videoFrames?.length) {
         return false;
       }
       if (trimmedContent.length === 0 && (!data.mediaDescription || data.mediaDescription.length < 10)) {
@@ -347,7 +355,7 @@ export default defineContentScript({
             if (el) {
               el.dataset.detectiumStatus = "done";
 
-              if (result.isFakeOrMisleading) {
+              if (typeof result.riskScore === "number" && result.riskScore >= detectionThreshold) {
                 injectWarningBanner(el, result, highlightColor);
               }
             }

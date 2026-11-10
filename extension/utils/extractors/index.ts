@@ -1,14 +1,14 @@
-import type { ExtractedPost, PostExtractor } from './types';
-import { xExtractor } from './xExtractor';
-import { instagramExtractor } from './instagramExtractor';
-import { genericExtractor } from './genericExtractor';
+import type { ExtractedPost, PostExtractor } from "./types";
+import { xExtractor } from "./xExtractor";
+import { instagramExtractor } from "./instagramExtractor";
+import { genericExtractor } from "./genericExtractor";
 
-export * from './types';
-export * from './common';
-export * from './baseExtractor';
-export * from './xExtractor';
-export * from './instagramExtractor';
-export * from './genericExtractor';
+export * from "./types";
+export * from "./common";
+export * from "./baseExtractor";
+export * from "./xExtractor";
+export * from "./instagramExtractor";
+export * from "./genericExtractor";
 
 // 기본 등록된 Extractor 목록 (우선순위 순서)
 const registeredExtractors: PostExtractor[] = [
@@ -31,7 +31,7 @@ export function registerExtractor(extractor: PostExtractor): void {
  * 현재 호스트명/URL에 적합한 PostExtractor 반환
  */
 export function getExtractor(hostname?: string): PostExtractor {
-  const targetHost = hostname || (typeof window !== 'undefined' ? window.location.hostname : '');
+  const targetHost = hostname || (typeof window !== "undefined" ? window.location.hostname : "");
 
   for (const extractor of registeredExtractors) {
     if (extractor.canHandle(targetHost)) {

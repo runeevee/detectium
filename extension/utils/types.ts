@@ -1,30 +1,33 @@
 export interface PostData {
   id: string;
-  platform: 'x' | 'instagram' | 'youtube' | 'generic';
+  platform: "x" | "instagram" | "youtube" | "generic";
   author: string;
   title?: string;
   content: string;
   mediaDescription?: string;
   imageUrls?: string[];
+  videoFrames?: VideoFrame[];
   imagesBase64?: string[];
   extractedImageText?: string;
   url?: string;
   shortcode?: string;
 }
 
+export interface VideoFrame {
+  timestampSeconds: number;
+  dataUrl: string;
+}
+
 export interface AnalysisResult {
   id: string;
-  isFakeOrMisleading: boolean;
-  category: '선동성 게시글' | '선동 및 여론 조작' | '통계 왜곡' | '가짜뉴스 / 허위사실' | '과장 및 맥락 왜곡' | '정상' | string;
   riskScore: number; // 0 ~ 100
-  summary: string;
   details: string;
   checkedPoints?: string[];
   extractedImageText?: string;
 }
 
 export interface AnalyzePostsRequest {
-  type: 'ANALYZE_POSTS_REQUEST';
+  type: "ANALYZE_POSTS_REQUEST";
   posts: PostData[];
 }
 
@@ -39,7 +42,7 @@ export interface AnalyzePostsResponse {
  */
 export interface ScannedPostItem {
   id: string;
-  platform: 'x' | 'instagram' | 'youtube' | 'generic';
+  platform: "x" | "instagram" | "youtube" | "generic";
   author: string;
   content: string;
   contentLength: number;
@@ -48,7 +51,7 @@ export interface ScannedPostItem {
   mediaDescription?: string;
   isVisible: boolean;
   extractionSuccess: boolean;
-  status: 'extracted' | 'api_sent' | 'analyzed' | 'analysis_failed' | 'extraction_failed';
+  status: "extracted" | "api_sent" | "analyzed" | "analysis_failed" | "extraction_failed";
   timestamp: number;
   domSelector?: string;
   analysisResult?: AnalysisResult;
