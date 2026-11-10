@@ -1,6 +1,11 @@
 import { extractVisiblePosts } from "../utils/extractors";
-import { injectWarningBanner } from "../utils/domRenderer";
-import type { AnalyzePostsRequest, AnalyzePostsResponse, ScannedPostItem } from "../utils/types";
+import { injectWarningBanner, updateAnalysisStatus } from "../utils/domRenderer";
+import type {
+  AnalysisResult,
+  AnalyzePostsRequest,
+  AnalyzePostsResponse,
+  ScannedPostItem,
+} from "../utils/types";
 
 type PostData = AnalyzePostsRequest["posts"][number];
 
@@ -27,6 +32,47 @@ export default defineContentScript({
 
     // 진행 중인 분석 요청 관리
     const pendingElementsMap = new Map<string, HTMLElement>();
+    const analyzedPostIds = new Set<string>();
+    const analysisResultsByPostId = new Map<string, AnalysisResult>();
+    const dismissedWarningPostIds = new Set<string>();
+
+    const getPostKey = (data: PostData): string => `${data.platform}:${data.id}`;
+    const showWarningBanner = (element: HTMLElement, result: AnalysisResult, postKey: string) => {
+      if (dismissedWarningPostIds.has(postKey)) {
+        return;
+      }
+
+      injectWarningBanner(element, result, highlightColor, () => {
+        dismissedWarningPostIds.add(postKey);
+      });
+    };
+
+    const storedScannedPostsReady = new Promise<void>((resolve) => {
+      if (!chrome.storage?.local) {
+        resolve();
+        return;
+      }
+
+      chrome.storage.local.get(["scannedPosts"], (res) => {
+        if (chrome.runtime.lastError) {
+          console.error("[Detectium] 검사 기록 조회 실패:", chrome.runtime.lastError.message);
+          resolve();
+          return;
+        }
+
+        const items: ScannedPostItem[] = Array.isArray(res?.scannedPosts) ? res.scannedPosts : [];
+        items.forEach((item) => {
+          if (item.status === "analyzed") {
+            const key = getPostKey(item);
+            analyzedPostIds.add(key);
+            if (item.analysisResult) {
+              analysisResultsByPostId.set(key, item.analysisResult);
+            }
+          }
+        });
+        resolve();
+      });
+    });
 
     // 스토리지 설정 동기화
     const syncSettings = () => {
@@ -248,9 +294,12 @@ export default defineContentScript({
         return;
       }
 
+      await storedScannedPostsReady;
+
       if (forceRescan) {
         document.querySelectorAll<HTMLElement>("[data-detectium-status]").forEach((el) => {
           delete el.dataset.detectiumStatus;
+          updateAnalysisStatus(el, null);
         });
       }
 
@@ -264,7 +313,45 @@ export default defineContentScript({
         return;
       }
 
-      const batchToProcess = visibleCandidates.slice(0, BATCH_SIZE);
+      const seenPostIds = new Set<string>();
+      const duplicateIds: string[] = [];
+      const alreadyAnalyzedIds: string[] = [];
+      const candidatesToAnalyze = visibleCandidates.filter(({ data, element }) => {
+        const key = getPostKey(data);
+        if (seenPostIds.has(key)) {
+          duplicateIds.push(key);
+          return false;
+        }
+        seenPostIds.add(key);
+
+        if (forceRescan || !analyzedPostIds.has(key)) {
+          return true;
+        }
+
+        element.dataset.detectiumStatus = "done";
+        const previousResult = analysisResultsByPostId.get(key);
+        if (previousResult && previousResult.riskScore >= detectionThreshold) {
+          updateAnalysisStatus(element, "failed");
+          showWarningBanner(element, previousResult, key);
+        } else {
+          updateAnalysisStatus(element, "passed");
+        }
+        alreadyAnalyzedIds.push(key);
+        return false;
+      });
+
+      if (duplicateIds.length > 0 || alreadyAnalyzedIds.length > 0) {
+        console.debug("[Detectium] 중복 게시물 건너뜀", {
+          duplicateIds,
+          alreadyAnalyzedIds,
+        });
+      }
+
+      if (candidatesToAnalyze.length === 0) {
+        return;
+      }
+
+      const batchToProcess = candidatesToAnalyze.slice(0, BATCH_SIZE);
 
       batchToProcess.forEach(({ data, element }) => {
         element.dataset.detectiumStatus = "pending";
@@ -285,17 +372,22 @@ export default defineContentScript({
           validPostsToSend.push(candidate);
         } else {
           candidate.element.dataset.detectiumStatus = "skipped";
+          updateAnalysisStatus(candidate.element, null);
           pendingElementsMap.delete(candidate.data.id);
         }
       });
 
       if (validPostsToSend.length === 0) {
-        scheduleNextBatch(visibleCandidates.length);
+        scheduleNextBatch(candidatesToAnalyze.length);
         return;
       }
 
       const postsPayload = validPostsToSend.map((item) => item.data);
       isAnalyzing = true;
+      validPostsToSend.forEach(({ element }) => updateAnalysisStatus(element, "loading"));
+      console.info("[Detectium] 게시물 분석 요청", {
+        posts: postsPayload.map(({ platform, id }) => `${platform}:${id}`),
+      });
 
       // API 전송 상태로 스토리지 업데이트
       saveOrUpdateScannedPosts(
@@ -304,14 +396,18 @@ export default defineContentScript({
         )
       );
 
-      const handleFailure = (reason: string) => {
+      const handleFailure = (
+        reason: string,
+        failedPosts: typeof validPostsToSend = validPostsToSend
+      ) => {
         saveOrUpdateScannedPosts(
-          validPostsToSend.map(({ data }) =>
+          failedPosts.map(({ data }) =>
             buildScannedItem(data, "analysis_failed", { failureReason: reason })
           )
         );
-        validPostsToSend.forEach(({ element }) => {
-          delete element.dataset.detectiumStatus;
+        failedPosts.forEach(({ element }) => {
+          element.dataset.detectiumStatus = "failed";
+          updateAnalysisStatus(element, "failed");
         });
       };
 
@@ -352,33 +448,47 @@ export default defineContentScript({
 
           response.results.forEach((result) => {
             const el = pendingElementsMap.get(result.id);
+            const postCandidate = validPostsToSend.find((p) => p.data.id === result.id);
             if (el) {
               el.dataset.detectiumStatus = "done";
 
               if (typeof result.riskScore === "number" && result.riskScore >= detectionThreshold) {
-                injectWarningBanner(el, result, highlightColor);
+                updateAnalysisStatus(el, "failed");
+                showWarningBanner(el, result, postCandidate ? getPostKey(postCandidate.data) : result.id);
+              } else {
+                updateAnalysisStatus(el, "passed");
               }
             }
 
-            const postCandidate = validPostsToSend.find((p) => p.data.id === result.id);
             if (postCandidate) {
+              const key = getPostKey(postCandidate.data);
+              analyzedPostIds.add(key);
+              analysisResultsByPostId.set(key, result);
               analyzedItems.push(buildScannedItem(postCandidate.data, "analyzed", { analysisResult: result }));
             }
           });
 
-          // 미응답 항목은 상태 초기화하여 추후 재시도 가능하게 함
           const returnedIds = new Set(response.results.map((r) => r.id));
-          validPostsToSend.forEach(({ data, element }) => {
-            if (!returnedIds.has(data.id)) {
-              delete element.dataset.detectiumStatus;
-            }
-          });
+          const missingPosts = validPostsToSend.filter(({ data }) => !returnedIds.has(data.id));
+          const missingIds = missingPosts.map(({ data }) => `${data.platform}:${data.id}`);
+          if (missingPosts.length > 0) {
+            handleFailure("분석 응답 누락", missingPosts);
+          }
 
+          console.info("[Detectium] 게시물 분석 완료", {
+            returned: analyzedItems.length,
+            missingIds,
+          });
           if (analyzedItems.length > 0) {
             saveOrUpdateScannedPosts(analyzedItems);
           }
         } else {
-          handleFailure(response.error || "분석 응답 오류");
+          const reason = response.error || "분석 응답 오류";
+          console.warn("[Detectium] 게시물 분석 실패", {
+            posts: postsPayload.map(({ platform, id }) => `${platform}:${id}`),
+            reason,
+          });
+          handleFailure(reason);
         }
       } catch (err: unknown) {
         console.error("[Detectium] 분석 실행 중 오류:", err);
@@ -386,7 +496,7 @@ export default defineContentScript({
       } finally {
         isAnalyzing = false;
         batchToProcess.forEach(({ data }) => pendingElementsMap.delete(data.id));
-        scheduleNextBatch(visibleCandidates.length);
+        scheduleNextBatch(candidatesToAnalyze.length);
       }
     };
 

@@ -34,6 +34,7 @@ export default () => {
   const [currentStep, setCurrentStep] = createSignal<number>(1); // 기본 보통(50)
   const [loading, setLoading] = createSignal<boolean>(true);
   const [currentPlatform, setCurrentPlatform] = createSignal("확인 중...");
+  const [cacheStatus, setCacheStatus] = createSignal<string>("");
 
   const activeLevel = createMemo(() => {
     const step = currentStep();
@@ -119,6 +120,22 @@ export default () => {
     if (typeof chrome !== "undefined" && chrome.storage?.sync) {
       chrome.storage.sync.set({ detectionThreshold: target?.threshold });
     }
+  };
+
+  const handleClearCache = () => {
+    if (typeof chrome === "undefined" || !chrome.storage?.local) {
+      setCacheStatus("브라우저 저장소를 사용할 수 없습니다.");
+      return;
+    }
+
+    chrome.storage.local.remove(["scannedPosts"], () => {
+      if (chrome.runtime.lastError) {
+        setCacheStatus("캐시 삭제에 실패했습니다.");
+        return;
+      }
+
+      setCacheStatus("캐시가 비워졌습니다.");
+    });
   };
 
   return (
@@ -267,6 +284,25 @@ export default () => {
               <span class={`${css.materialIcon} ${css.descIcon}`}>info</span>
               <span>{activeLevel()?.description}</span>
             </div>
+          </div>
+        </section>
+
+        <section class={css.section}>
+          <div class={css.cacheCard}>
+            <div class={css.sectionHeader}>
+              <div class={css.sectionTitleWrap}>
+                <span class={`${css.materialIcon} ${css.sectionIcon}`}>delete</span>
+                <span class={css.sectionTitle}>캐시 관리</span>
+              </div>
+            </div>
+
+            <button type="button" class={css.clearCacheBtn} onClick={handleClearCache}>
+              게시글 캐시 비우기
+            </button>
+
+            <Show when={cacheStatus()}>
+              <span class={css.cacheStatus}>{cacheStatus()}</span>
+            </Show>
           </div>
         </section>
       </div>

@@ -48,6 +48,10 @@ export abstract class BasePostExtractor implements PostExtractor {
         continue;
       }
 
+      if (el.dataset.detectiumStatus === "failed" && !forceRescan) {
+        continue;
+      }
+
       // 이미 분석 완료된 경우
       if (el.dataset.detectiumStatus === "done") {
         if (forceRescan) {

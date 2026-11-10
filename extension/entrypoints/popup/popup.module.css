@@ -427,3 +427,35 @@
   flex-shrink: 0;
   margin-top: 1px;
 }
+
+.cacheCard {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clearCacheBtn {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clearCacheBtn:hover {
+  background: #ffe4e6;
+}
+
+.cacheStatus {
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.4;
+}
