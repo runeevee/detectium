@@ -6,7 +6,7 @@ import { fetchRelatedDaumNews, formatNewsForPrompt } from './newsSearcher';
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   const chunkSize = 8192;
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < bytes.length; i += chunkSize) {
     const chunk = bytes.subarray(i, i + chunkSize);
     binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
@@ -20,10 +20,10 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
     const res = await fetch(url).catch(() => null);
     if (!res || !res.ok) return null;
     const blob = await res.blob();
-    const mime = blob.type || 'image/jpeg';
+    const mime = blob.type || "image/jpeg";
 
-    // OffscreenCanvas 지원 시 브라우저 환경에서 이미지 다운스케일링 (최대 1024px, 토큰 절약 및 OCR 정확도 극대화)
-    if (typeof OffscreenCanvas !== 'undefined' && typeof createImageBitmap !== 'undefined') {
+    // OffscreenCanvas 지원 시 브라우저 환경에서 이미지 다운스케일링 (최대 1024px, 토큰 절약 및 OCR 정확도)
+    if (typeof OffscreenCanvas !== "undefined" && typeof createImageBitmap !== "undefined") {
       try {
         const bitmap = await createImageBitmap(blob);
         const maxDimension = 1024;
@@ -37,11 +37,13 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
             height = maxDimension;
           }
         }
-        const canvas = new OffscreenCanvas(width, height);
-        const ctx = canvas.getContext('2d');
+
+        // 다운스케일
+        const canvas = new OffscreenCanvas(width / 2, height / 2);
+        const ctx = canvas.getContext("2d");
         if (ctx) {
-          ctx.drawImage(bitmap, 0, 0, width, height);
-          const resizedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+          ctx.drawImage(bitmap, 0, 0, width / 2, height / 2);
+          const resizedBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
           const buffer = await resizedBlob.arrayBuffer();
           return `data:image/jpeg;base64,${arrayBufferToBase64(buffer)}`;
         }
@@ -53,71 +55,59 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
     const buffer = await blob.arrayBuffer();
     return `data:${mime};base64,${arrayBufferToBase64(buffer)}`;
   } catch (err) {
-    console.warn('[Detectium] 이미지 변환 실패:', url, err);
+    console.warn("[Detectium] 이미지 변환 실패:", url, err);
     return null;
   }
 }
 
 type ContentPart =
-  | { type: 'text'; text: string }
-  | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } };
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "auto" | "low" | "high" } };
 
 export async function analyzePostsWithOpenAI(
   posts: PostData[],
   apiKey?: string,
-  detectionThreshold: number = 70
+  detectionThreshold = 50
 ): Promise<AnalysisResult[]> {
   const effectiveKey = apiKey?.trim() || process.env.OPENAI_API_KEY;
 
   if (!effectiveKey) {
-    throw new Error('OpenAI API 키가 설정되지 않았습니다. 확장 프로그램 설정 페이지에서 API 키를 입력해주세요.');
+    throw new Error("OpenAI API 키가 설정되지 않았습니다. 확장 프로그램 설정 페이지에서 API 키를 입력해주세요.");
   }
 
   if (!posts || posts.length === 0) {
     return [];
   }
 
-  // 캡션이 빈 문자열이거나 작성자 계정명만 포함되어 있는 게시글은 API 전송에서 제외 (요구사항 6)
+  // 캡션이 빈 문자열이거나 작성자 계정명만 포함되어 있는 게시글은 API 전송에서 제외
   const validPosts = posts.filter((p) => {
-    const trimmedContent = (p.content || '').trim();
-    const trimmedAuthor = (p.author || '').trim();
+    const trimmedContent = (p.content || "").trim();
+    const trimmedAuthor = (p.author || "").trim();
     const hasImages = Boolean(p.imageUrls && p.imageUrls.length > 0);
 
-    if (p.platform === 'instagram' && !trimmedContent) {
-      console.warn(`[Detectium][openaiService.ts:analyzePostsWithOpenAI] 인스타그램 캡션이 비어 있어 제외됨 (ID: ${p.id})`);
+    if (p.platform === "instagram" && !trimmedContent) {
       return false;
     }
-    // 본문이 없더라도 이미지(카드뉴스 등)가 있으면 OCR 분석 대상으로 유지
     if (!trimmedContent && !hasImages && (!p.mediaDescription || p.mediaDescription.length < 10)) {
-      console.warn(`[Detectium][openaiService.ts:analyzePostsWithOpenAI] 본문이 없어 제외됨 (ID: ${p.id})`);
       return false;
     }
     if (
       trimmedContent &&
       trimmedAuthor &&
       (trimmedContent === trimmedAuthor ||
-        trimmedContent.replace(/[@\s]/g, '') === trimmedAuthor.replace(/[@\s]/g, ''))
+        trimmedContent.replace(/[@\s]/g, "") === trimmedAuthor.replace(/[@\s]/g, ""))
     ) {
-      console.warn(`[Detectium][openaiService.ts:analyzePostsWithOpenAI] 작성자 계정명만 포함되어 제외됨 (ID: ${p.id})`);
       return false;
     }
     return true;
   });
 
   if (validPosts.length === 0) {
-    console.log('[Detectium][openaiService.ts:analyzePostsWithOpenAI] 유효한 검증 대상 게시글이 없어 API 호출 생략');
     return [];
   }
 
-  validPosts.forEach((p, idx) => {
-    console.log(
-      `[Detectium][openaiService.ts:analyzePostsWithOpenAI #${idx + 1}] ID: ${p.id} | 작성자: ${p.author} | 캡션 길이: ${p.content?.length || 0}자 | 미리보기: "${(p.content || '').slice(0, 100)}..."`
-    );
-  });
-
   const client = new OpenAI({
     apiKey: effectiveKey,
-    // 브라우저 확장 프로그램 서비스 워커 환경 지원
     dangerouslyAllowBrowser: true,
   });
 
@@ -185,7 +175,6 @@ export async function analyzePostsWithOpenAI(
    - 출처 없는 "카더라" 소문, 조작된 캡처본, 음모론을 마치 사실인 양 포장하여 대중을 호도하는 글
    - "충격", "경악", "소름 돋는 진실", "전 국민 분노", "폭로" 등 자극적인 표제로 시작하여 비합리적인 결론과 적개심을 유도하는 카드뉴스/게시글
    - 특정 인물이나 집단을 표적 삼아 흑색선전을 펼치거나 집단적 비난을 유도하는 글
-   -> 위 중 하나라도 해당하면 반드시 isFakeOrMisleading: true, category: "선동성 게시글" (또는 "선동 및 여론 조작"), riskScore: 70~100 부여
 
 2. 통계 왜곡:
    - 상관관계를 인과관계로 비약하거나 억지 주장
@@ -200,9 +189,16 @@ export async function analyzePostsWithOpenAI(
    - 오래된 정보를 최신 사실처럼 제시하거나, 과거 사건의 사진/영상을 현재 사건처럼 사용하는 경우
    - 출처 없는 "카더라" 정보, 전문가·기관 사칭, 존재하지 않는 연구/기관 인용
 
-4. 판별 및 임계값:
-   - isFakeOrMisleading: 위험도 점수가 ${detectionThreshold}점 이상이거나, 선동성 글 / 통계 왜곡 / 허위 사실이 포함되어 독자에게 중대한 오해나 분노/혐오를 유발할 경우 true. 검증 결과 사실에 부합하고 선동성이 없는 글은 false.
-   - riskScore: 0~100 (정상=0~30, 경미한 과장=31~60, 명백한 선동/왜곡/가짜=61~100)
+4. 판별 및 임계값 설정 (★핵심 판별 규칙★):
+   - 현재 필터링 강도 임계값: ${detectionThreshold}점
+     (강도 기준: [약함] 70점 이상 필터링 | [보통] 50점 이상 필터링 | [강함] 40점 이상 필터링)
+   - riskScore 점수 산정 기준 (0~100점):
+     * 0 ~ 39점 (정상/낮은 위험): 사실에 부합하거나 통상적인 개인 의견, 건전한 비판
+     * 40 ~ 49점 (경미한 과장/주의): 자극적 어휘, 부분적 과장, 출처 불분명한 경미한 주장 (강함 강도에서 필터링)
+     * 50 ~ 69점 (보통 위험/왜곡·선동): 악마의 편집, 체리피킹, 통계 왜곡, 대중의 감정적 분노 조장 (보통 이상 강도에서 필터링)
+     * 70 ~ 100점 (높은 위험/명백한 조작·선동): 명백한 허위 사실, 날조된 정보, 노골적인 선동 및 흑색선전 (약함 강도에서도 필터링)
+   - isFakeOrMisleading 판정:
+     * 산출된 riskScore가 ${detectionThreshold}점 이상이면 반드시 true, ${detectionThreshold}점 미만이면 반드시 false로 지정하십시오.
    - category: "선동성 게시글" | "선동 및 여론 조작" | "통계 왜곡" | "가짜뉴스 / 허위사실" | "과장 및 맥락 왜곡" | "정상" 중 택1
    - summary: 판정의 핵심 이유를 1문장으로 요약 (예: "카드뉴스 이미지 속 자극적 허위 수치로 특정 집단에 대한 적대감을 부추기는 선동글")
    - details: 추출된 이미지 텍스트와 본문에서 어떤 부분이 왜곡되었거나 선동적인지, 관련 뉴스와 비교한 실제 사실 관계는 무엇인지를 일반인이 이해하기 쉽게 2~3문장으로 구체적으로 설명
@@ -228,7 +224,6 @@ export async function analyzePostsWithOpenAI(
 }
 `.trim();
 
-  // 멀티모달 유저 프롬프트 구성 (텍스트 + 이미지들)
   const userContent: ContentPart[] = [];
   userContent.push({
     type: 'text',
@@ -237,21 +232,21 @@ export async function analyzePostsWithOpenAI(
 
   postsWithImages.forEach((p, postIdx) => {
     userContent.push({
-      type: 'text',
-      text: `\n----------------------------------------\n[게시글 #${postIdx + 1} / ID: ${p.id}]\n- 플랫폼: ${p.platform}\n- 작성자: ${p.author || '알 수 없음'}\n- 본문 내용: ${p.content || '(본문 텍스트 없음 - 아래 첨부 이미지의 텍스트를 읽고 분석할 것)'}\n- 미디어 정보: ${p.mediaDescription || '없음'}\n- 첨부된 이미지 수: ${p.imagesBase64.length}장\n`,
+      type: "text",
+      text: `\n----------------------------------------\n[게시글 #${postIdx + 1} / ID: ${p.id}]\n- 플랫폼: ${p.platform}\n- 작성자: ${p.author || "알 수 없음"}\n- 본문 내용: ${p.content || "(본문 텍스트 없음 - 아래 첨부 이미지의 텍스트를 읽고 분석할 것)"}\n- 미디어 정보: ${p.mediaDescription || "없음"}\n- 첨부된 이미지 수: ${p.imagesBase64.length}장\n`,
     });
 
     if (p.imagesBase64.length > 0) {
       p.imagesBase64.forEach((urlOrBase64, imgIdx) => {
         userContent.push({
-          type: 'text',
+          type: "text",
           text: `▲ [게시글 ID: ${p.id}]의 이미지 #${imgIdx + 1}:`,
         });
         userContent.push({
-          type: 'image_url',
+          type: "image_url",
           image_url: {
             url: urlOrBase64,
-            detail: 'high',
+            detail: "high",
           },
         });
       });
@@ -259,13 +254,13 @@ export async function analyzePostsWithOpenAI(
   });
 
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
-    response_format: { type: 'json_object' },
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
     temperature: 0.1,
     messages: [
-      { role: 'system', content: systemPrompt },
+      { role: "system", content: systemPrompt },
       {
-        role: 'user',
+        role: "user",
         content: userContent as any,
       },
     ],
@@ -273,7 +268,7 @@ export async function analyzePostsWithOpenAI(
 
   const content = response.choices[0]?.message?.content;
   if (!content) {
-    throw new Error('OpenAI 모델로부터 응답을 받지 못했습니다.');
+    throw new Error("OpenAI 모델로부터 응답을 받지 못했습니다.");
   }
 
   try {
@@ -281,7 +276,7 @@ export async function analyzePostsWithOpenAI(
     const results: AnalysisResult[] = Array.isArray(parsed.results) ? parsed.results : [];
     return results;
   } catch (err) {
-    console.error('[Detectium] Failed to parse OpenAI JSON response:', content, err);
-    throw new Error('OpenAI 응답 파싱에 실패했습니다.');
+    console.error("[Detectium] OpenAI JSON 응답 파싱 실패:", content, err);
+    throw new Error("OpenAI 응답 파싱에 실패했습니다.");
   }
 }

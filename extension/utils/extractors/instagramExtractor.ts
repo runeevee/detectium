@@ -1,10 +1,10 @@
-import type { PostData } from './types';
-import { wait, generateSimpleHash, isElementInViewport } from './postExtractor';
+import type { ExtractedPost } from './types';
+import { BasePostExtractor } from './baseExtractor';
+import { wait, generateSimpleHash, isClickableMoreButton } from './common';
 
-// ---------------------------------------------------------------------------
-// Instagram 이미지 URL 추출
-// ---------------------------------------------------------------------------
-
+/**
+ * 인스타그램 단일 게시글 속 모든 이미지의 URL을 반환합니다.
+ */
 export function extractInstagramImageUrls(article: HTMLElement): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
@@ -64,8 +64,7 @@ export function extractInstagramImageUrls(article: HTMLElement): string[] {
 // ---------------------------------------------------------------------------
 // Instagram 캡션 찾기
 // ---------------------------------------------------------------------------
-
-function findInstagramCaption(article: HTMLElement, author: string): HTMLElement | null {
+export function findInstagramCaption(article: HTMLElement, author: string): HTMLElement | null {
   const header = article.querySelector('header');
   const candidates = Array.from(
     article.querySelectorAll<HTMLElement>('h1, div._a9zs, span[dir="auto"]')
@@ -92,70 +91,21 @@ function findInstagramCaption(article: HTMLElement, author: string): HTMLElement
 // ---------------------------------------------------------------------------
 // Instagram 작성자 추출
 // ---------------------------------------------------------------------------
-
 export function extractInstagramAuthor(article: HTMLElement): string {
   const header = article.querySelector('header');
   const authorLink = header?.querySelector<HTMLAnchorElement>('a[href]');
   return (authorLink?.textContent || '').trim();
 }
 
-export function findInstagramCaptionContainer(article: HTMLElement, author: string): HTMLElement | null {
-  return findInstagramCaption(article, author);
-}
-
-// ---------------------------------------------------------------------------
-// "더 보기" 버튼 판별
-// ---------------------------------------------------------------------------
-
-export function isClickableMoreButton(element: HTMLElement): boolean {
-  if (
-    !element.isConnected ||
-    element.hasAttribute('disabled') ||
-    element.getAttribute('aria-disabled') === 'true'
-  ) {
-    return false;
-  }
-  if (element instanceof HTMLButtonElement && element.disabled) {
-    return false;
-  }
-
-  const isMoreLabel = (label: string): boolean =>
-    /^(?:\.{2,}\s*)?(?:더\s*보기|자세히\s*보기|more|show\s*more|read\s*more)$/i.test(
-      label.replace(/…/g, '...').trim()
-    );
-  const labels = [
-    element.innerText || '',
-    element.textContent || '',
-    element.getAttribute('aria-label') || '',
-  ];
-  if (!labels.some(isMoreLabel)) {
-    return false;
-  }
-
-  const style = window.getComputedStyle(element);
-  const rect = element.getBoundingClientRect();
-  return (
-    (element.matches('button, [role="button"], a') || style.cursor === 'pointer') &&
-    style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    style.pointerEvents !== 'none' &&
-    Number.parseFloat(style.opacity || '1') > 0 &&
-    rect.width > 0 &&
-    rect.height > 0
-  );
-}
-
 // ---------------------------------------------------------------------------
 // 확장된 게시글 추적 (모듈 레벨 WeakSet)
 // ---------------------------------------------------------------------------
-
 const expandedInstagramPosts = new WeakSet<HTMLElement>();
 
 // ---------------------------------------------------------------------------
 // Instagram 캡션 "더 보기" 확장
 // ---------------------------------------------------------------------------
-
-async function expandInstagramCaption(article: HTMLElement, author: string): Promise<boolean> {
+export async function expandInstagramCaption(article: HTMLElement, author: string): Promise<boolean> {
   if (expandedInstagramPosts.has(article)) {
     return false;
   }
@@ -198,8 +148,7 @@ async function expandInstagramCaption(article: HTMLElement, author: string): Pro
 // ---------------------------------------------------------------------------
 // Instagram 캡션 텍스트 추출 (버튼 등 제거)
 // ---------------------------------------------------------------------------
-
-function extractInstagramCaption(caption: HTMLElement, article: HTMLElement, author: string): string {
+export function extractInstagramCaption(caption: HTMLElement, article: HTMLElement, author: string): string {
   const copy = caption.cloneNode(true) as HTMLElement;
   copy.querySelectorAll('button, [role="button"], a[role="button"]').forEach((element) => element.remove());
 
@@ -216,20 +165,10 @@ function extractInstagramCaption(caption: HTMLElement, article: HTMLElement, aut
   return (copy.innerText || copy.textContent || '').trim();
 }
 
-export function extractCleanCaptionText(caption: HTMLElement, author: string): string {
-  const article = caption.closest<HTMLElement>('article') || caption.parentElement || caption;
-  return extractInstagramCaption(caption, article, author);
-}
-
-export async function expandInstagramPost(article: HTMLElement): Promise<boolean> {
-  return expandInstagramCaption(article, extractInstagramAuthor(article));
-}
-
 // ---------------------------------------------------------------------------
 // Instagram 작성자 해결 (헤더 우선, 없으면 폴백)
 // ---------------------------------------------------------------------------
-
-function resolveInstagramAuthor(article: HTMLElement): string {
+export function resolveInstagramAuthor(article: HTMLElement): string {
   const fromHeader = extractInstagramAuthor(article);
   if (fromHeader) return fromHeader;
   const fallbackEl = article.querySelector('header a, a[role="link"]');
@@ -240,8 +179,7 @@ function resolveInstagramAuthor(article: HTMLElement): string {
 // ---------------------------------------------------------------------------
 // Instagram 게시글 추출 (단일 article)
 // ---------------------------------------------------------------------------
-
-export function extractInstagramPost(article: HTMLElement): { data: PostData; element: HTMLElement } | null {
+export function extractInstagramPost(article: HTMLElement): ExtractedPost | null {
   const author = resolveInstagramAuthor(article);
 
   // 캡션 본문 (정제된 캡션 -> 실패 시 기존 방식 폴백)
@@ -310,65 +248,44 @@ export function extractInstagramPost(article: HTMLElement): { data: PostData; el
   };
 }
 
-// ---------------------------------------------------------------------------
-// Instagram 가시 게시글 전체 스캔 루프
-// ---------------------------------------------------------------------------
+/**
+ * 인스타그램 전용 Extractor 구현체
+ */
+export class InstagramExtractor extends BasePostExtractor {
+  readonly platform = 'instagram' as const;
 
-export async function extractInstagramVisiblePosts(
-  forceRescan = false
-): Promise<Array<{ data: PostData; element: HTMLElement }>> {
-  const extracted: Array<{ data: PostData; element: HTMLElement }> = [];
+  canHandle(hostname: string): boolean {
+    return hostname.includes('instagram.com');
+  }
 
-  // 인스타그램 메인 피드 및 상세 뷰의 게시글 article
-  let candidateElements = document.querySelectorAll<HTMLElement>(
-    'article, main article, div[role="presentation"] > div > article'
-  );
-  if (candidateElements.length === 0) {
-    // 일부 인스타그램 뷰 대응
-    candidateElements = document.querySelectorAll<HTMLElement>(
-      'main div[style*="flex-direction: column"] > div'
+  getCandidateElements(): HTMLElement[] {
+    let candidateElements = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'article, main article, div[role="presentation"] > div > article'
+      )
     );
+    if (candidateElements.length === 0) {
+      // 일부 인스타그램 뷰 대응
+      candidateElements = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          'main div[style*="flex-direction: column"] > div'
+        )
+      );
+    }
+    return candidateElements;
   }
 
-  for (const el of Array.from(candidateElements)) {
-    // 이미 분석 진행 중인 경우 스킵
-    if (el.dataset.detectiumStatus === 'pending') {
-      continue;
-    }
-
-    // 이미 분석 완료된 경우
-    if (el.dataset.detectiumStatus === 'done') {
-      if (forceRescan) {
-        delete el.dataset.detectiumStatus;
-      } else {
-        // 카드뉴스 다음 슬라이드 등으로 새 이미지가 추가되었는지 확인
-        const prevCount = parseInt(el.dataset.detectiumImageCount || '0', 10);
-        const currentImagesCount = extractInstagramImageUrls(el).length;
-        if (currentImagesCount <= prevCount) {
-          continue;
-        }
-        delete el.dataset.detectiumStatus;
-      }
-    }
-
-    // 뷰포트 내에 보이는지 검사
-    if (!isElementInViewport(el)) {
-      continue;
-    }
-
-    // 캡션의 "더 보기"를 먼저 펼친 뒤 추출
-    await expandInstagramCaption(el, resolveInstagramAuthor(el));
-    const parsed = extractInstagramPost(el);
-
-    if (
-      parsed &&
-      (parsed.data.content.length >= 5 ||
-        (parsed.data.imageUrls && parsed.data.imageUrls.length > 0) ||
-        (parsed.data.mediaDescription && parsed.data.mediaDescription.length >= 5))
-    ) {
-      extracted.push(parsed);
-    }
+  getImageUrls(article: HTMLElement): string[] {
+    return extractInstagramImageUrls(article);
   }
 
-  return extracted;
+  protected override async beforeExtract(element: HTMLElement): Promise<void> {
+    await expandInstagramCaption(element, resolveInstagramAuthor(element));
+  }
+
+  extractPost(article: HTMLElement): ExtractedPost | null {
+    return extractInstagramPost(article);
+  }
 }
+
+export const instagramExtractor = new InstagramExtractor();

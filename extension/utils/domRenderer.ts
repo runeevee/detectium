@@ -1,33 +1,35 @@
-import type { AnalysisResult } from './types';
+import type { AnalysisResult } from "./types";
 
 function escapeHtml(str: string): string {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 export function injectWarningBanner(
   targetElement: HTMLElement,
   result: AnalysisResult,
-  themeColor: string = '#4f46e5'
+  _highlightColor?: string
 ) {
   // 이미 경고창이 삽입되어 있는지 확인
-  if (targetElement.querySelector('.detectium-overlay-host')) {
+  if (targetElement.querySelector(".detectium-overlay-host")) {
     return;
   }
 
-  // 게시글 컨테이너가 position: static이면 relative로 변경 (overlay 위치 기준)
+  // 조건에 걸린 게시글에는 붉은 테두리 항상 표시
+  targetElement.style.setProperty("outline", "3px solid #b91c1c", "important");
+
+  // 게시글 컨테이너가 position: static이면 relative로 변경
   const currentPosition = window.getComputedStyle(targetElement).position;
-  if (currentPosition === 'static') {
-    targetElement.style.position = 'relative';
+  if (currentPosition === "static") {
+    targetElement.style.position = "relative";
   }
 
-  // 오버레이 호스트 (Shadow DOM)
-  const host = document.createElement('div');
-  host.className = 'detectium-overlay-host';
+  const host = document.createElement("div");
+  host.className = "detectium-overlay-host";
   host.style.cssText = `
     position: absolute;
     top: 0;
@@ -40,22 +42,11 @@ export function injectWarningBanner(
     pointer-events: auto;
   `;
 
-  const shadow = host.attachShadow({ mode: 'open' });
+  const shadow = host.attachShadow({ mode: "open" });
 
-  // Category info
-  const isAgitation = result.category.includes('선동');
-  const isStatDistortion = result.category.includes('통계');
-
-  let categoryIcon = '🚨';
-  let alertColor = '#ef4444';
-
-  if (isAgitation) {
-    categoryIcon = '📢';
-    alertColor = '#f97316';
-  } else if (isStatDistortion) {
-    categoryIcon = '📊';
-    alertColor = '#f59e0b';
-  }
+  const isAgitation = result.category.includes("선동");
+  const isStatDistortion = result.category.includes("통계");
+  const categoryIcon = isAgitation ? "📢" : isStatDistortion ? "📊" : "🚨";
 
   shadow.innerHTML = `
     <style>
@@ -68,7 +59,7 @@ export function injectWarningBanner(
         position: absolute;
         top: 0; left: 0; right: 0; bottom: 0;
         width: 100%; height: 100%;
-        background: rgba(185, 28, 28, 0.82);
+        background: rgba(185, 28, 28, 0.85);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -106,14 +97,6 @@ export function injectWarningBanner(
         border-radius: 20px;
         letter-spacing: -0.01em;
       }
-      .risk-badge {
-        background: rgba(0,0,0,0.4);
-        color: #fca5a5;
-        font-size: 12px;
-        font-weight: 600;
-        padding: 2px 8px;
-        border-radius: 10px;
-      }
       .show-anyway-btn {
         margin-top: 4px;
         background: rgba(255,255,255,0.15);
@@ -132,7 +115,7 @@ export function injectWarningBanner(
         border-color: rgba(255,255,255,0.8);
       }
       .summary-preview {
-        font-size: 12px;
+        font-size: 1rem;
         color: rgba(255,255,255,0.85);
         text-align: center;
         max-width: 280px;
@@ -141,19 +124,13 @@ export function injectWarningBanner(
       }
     </style>
     <div class="overlay">
-      <div class="warning-icon">${categoryIcon}</div>
-      <div class="warning-title">⚠️ 경고: ${escapeHtml(result.category)}</div>
-      <div class="warning-category">${categoryIcon} Detectium AI 판별 · 위험도 ${result.riskScore}%</div>
       <div class="summary-preview">${escapeHtml(result.summary)}</div>
-      <button class="show-anyway-btn">그래도 보기</button>
+      <button class="show-anyway-btn">해당 사실을 인지하고 있으며, 계속 보겠습니다.</button>
     </div>
   `;
 
-  // "그래도 보기" 클릭 시 오버레이 제거
-  const btn = shadow.querySelector('.show-anyway-btn');
-  btn?.addEventListener('click', () => {
-    host.remove();
-  });
+  const btn = shadow.querySelector(".show-anyway-btn");
+  btn?.addEventListener("click", () => { host.remove(); });
 
   targetElement.appendChild(host);
 }

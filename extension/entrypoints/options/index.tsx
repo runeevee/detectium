@@ -1,5 +1,5 @@
 import { render } from "solid-js/web";
-import "@css/variable.css";
+import "@css/var.css";
 import "@css/global.css";
 import App from "./app";
 

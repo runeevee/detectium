@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig } from "wxt";
+import { defineConfig, defineWebExtConfig } from "wxt";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -21,12 +21,6 @@ export default defineConfig({
       "*://*.twitter.com/*",
       "<all_urls>",
     ],
-    webExt: {
-      chromiumArgs: [
-        '--enable-blink-features=AutomationControlled',
-        '--test-type',
-      ],
-    },
   },
   vite: () => ({
     define: {
