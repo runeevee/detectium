@@ -19,6 +19,9 @@ export function injectWarningBanner(
     return;
   }
 
+  // 조건에 걸린 게시글에는 붉은 테두리 항상 표시
+  targetElement.style.setProperty("outline", "3px solid #b91c1c", "important");
+
   // 게시글 컨테이너가 position: static이면 relative로 변경
   const currentPosition = window.getComputedStyle(targetElement).position;
   if (currentPosition === "static") {
@@ -121,9 +124,6 @@ export function injectWarningBanner(
       }
     </style>
     <div class="overlay">
-      <div class="warning-icon">${categoryIcon}</div>
-      <div class="warning-title">⚠️ 경고: ${escapeHtml(result.category)}</div>
-      <div class="warning-category">${categoryIcon} Detectium AI 판별 · 위험도 ${result.riskScore}%</div>
       <div class="summary-preview">${escapeHtml(result.summary)}</div>
       <button class="show-anyway-btn">해당 사실을 인지하고 있으며, 계속 보겠습니다.</button>
     </div>
