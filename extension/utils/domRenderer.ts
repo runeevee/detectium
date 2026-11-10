@@ -9,18 +9,95 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
+export function updateAnalysisStatus(
+  targetElement: HTMLElement,
+  status: "loading" | "passed" | "failed" | null
+) {
+  const existingHost = Array.from(targetElement.children).find((child) =>
+    child.classList.contains("detectium-status-host")
+  );
+  if (status === null) {
+    existingHost?.remove();
+    return;
+  }
+
+  if (existingHost?.getAttribute("data-status") === status) {
+    return;
+  }
+  existingHost?.remove();
+
+  if (window.getComputedStyle(targetElement).position === "static") {
+    targetElement.style.position = "relative";
+  }
+
+  const host = document.createElement("div");
+  host.className = "detectium-status-host";
+  host.setAttribute("data-status", status);
+  const label = status === "loading" ? "검사 중" : status === "passed" ? "검사 통과" : "검사 실패";
+  host.setAttribute("aria-label", label);
+  host.setAttribute("role", "img");
+  const targetStyle = window.getComputedStyle(targetElement);
+  const borderRadius = targetStyle.borderRadius;
+  const borderWidths = [
+    targetStyle.borderTopWidth,
+    targetStyle.borderRightWidth,
+    targetStyle.borderBottomWidth,
+    targetStyle.borderLeftWidth,
+  ]
+    .map((width) => (Number.parseFloat(width) > 0 ? width : "2px"))
+    .join(" ");
+  host.style.cssText = `
+    position: absolute;
+    inset: -${targetStyle.borderTopWidth} -${targetStyle.borderRightWidth} -${targetStyle.borderBottomWidth} -${targetStyle.borderLeftWidth};
+    z-index: 1;
+    border-radius: ${borderRadius};
+    border-width: ${borderWidths};
+    pointer-events: none;
+  `;
+  if (window.location.hostname.includes("instagram.com")) {
+    host.style.transform = "translateY(-10px)";
+  }
+
+  const shadow = host.attachShadow({ mode: "open" });
+  shadow.innerHTML = `
+    <style>
+      :host {
+        all: initial;
+        display: block;
+        box-sizing: border-box;
+        border-radius: inherit;
+        border: 1px solid transparent;
+        transition: border-color 600ms ease-in-out;
+      }
+      :host([data-status="loading"]) {
+        animation: detectium-loading-pulse 1.2s ease-in-out infinite alternate;
+      }
+      :host([data-status="passed"]) {
+        border-color: #18ff6d;
+      }
+      :host([data-status="failed"]) {
+        border-color: #ff1859;
+      }
+      @keyframes detectium-loading-pulse {
+        from { border-color: #fff; }
+        to { border-color: #5f9aff; }
+      }
+    </style>
+  `;
+
+  targetElement.appendChild(host);
+}
+
 export function injectWarningBanner(
   targetElement: HTMLElement,
   result: AnalysisResult,
-  _highlightColor?: string
+  _highlightColor?: string,
+  onDismiss?: () => void
 ) {
   // 이미 경고창이 삽입되어 있는지 확인
   if (targetElement.querySelector(".detectium-overlay-host")) {
     return;
   }
-
-  // 조건에 걸린 게시글에는 붉은 테두리 항상 표시
-  targetElement.style.setProperty("outline", "3px solid #b91c1c", "important");
 
   // 게시글 컨테이너가 position: static이면 relative로 변경
   const currentPosition = window.getComputedStyle(targetElement).position;
@@ -30,17 +107,17 @@ export function injectWarningBanner(
 
   const host = document.createElement("div");
   host.className = "detectium-overlay-host";
+  const targetStyle = window.getComputedStyle(targetElement);
   host.style.cssText = `
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: 100%;
+    inset: -${targetStyle.borderTopWidth} -${targetStyle.borderRightWidth} -${targetStyle.borderBottomWidth} -${targetStyle.borderLeftWidth};
     z-index: 100;
+    border-radius: ${targetStyle.borderRadius};
     pointer-events: auto;
   `;
+  if (window.location.hostname.includes("instagram.com")) {
+    host.style.transform = "translateY(-10px)";
+  }
 
   const shadow = host.attachShadow({ mode: "open" });
 
@@ -53,8 +130,8 @@ export function injectWarningBanner(
       }
       .overlay {
         position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        width: 100%; height: 100%;
+        inset: 1px;
+        border-radius: ${targetStyle.borderRadius};
         background: rgba(185, 28, 28, 0.85);
         display: flex;
         flex-direction: column;
@@ -103,7 +180,10 @@ export function injectWarningBanner(
   `;
 
   const btn = shadow.querySelector(".show-anyway-btn");
-  btn?.addEventListener("click", () => { host.remove(); });
+  btn?.addEventListener("click", () => {
+    host.remove();
+    onDismiss?.();
+  });
 
   targetElement.appendChild(host);
 }
