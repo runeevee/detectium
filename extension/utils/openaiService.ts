@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { PostData, AnalysisResult } from './types';
+import { fetchRelatedDaumNews, formatNewsForPrompt } from './newsSearcher';
 
 // ArrayBuffer -> Base64 안전 변환 (대용량 이미지 콜스택 초과 방지)
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -120,27 +121,39 @@ export async function analyzePostsWithOpenAI(
     dangerouslyAllowBrowser: true,
   });
 
-  // 필터링을 통과한 게시글의 이미지들을 Base64로 병렬 변환 (실패 시 원본 URL 폴백)
-  const postsWithImages = await Promise.all(
-    validPosts.map(async (p) => {
-      let imagesBase64: string[] = [];
-      if (p.imageUrls && p.imageUrls.length > 0) {
-        // 게시글당 최대 5장의 이미지 변환 (대부분의 카드뉴스는 3~5장 내외)
-        const targets = p.imageUrls.slice(0, 5);
-        const converted = await Promise.all(
-          targets.map(async (url) => {
-            const base64 = await fetchImageAsBase64(url);
-            return base64 || url;
-          })
-        );
-        imagesBase64 = converted.filter((b): b is string => Boolean(b));
-      }
-      return {
-        ...p,
-        imagesBase64,
-      };
-    })
-  );
+  // 게시글 본문을 합쳐 뉴스 검색용 쿼리 생성 (이미지 변환과 병렬 실행)
+  const combinedQuery = validPosts
+    .map((p) => p.content || p.mediaDescription || '')
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 80);
+
+  // 이미지 Base64 변환 + Daum 뉴스 검색을 병렬로 실행 (서로 독립)
+  const [postsWithImages, relatedNews] = await Promise.all([
+    Promise.all(
+      validPosts.map(async (p) => {
+        let imagesBase64: string[] = [];
+        if (p.imageUrls && p.imageUrls.length > 0) {
+          // 게시글당 최대 5장의 이미지 변환 (대부분의 카드뉴스는 3~5장 내외)
+          const targets = p.imageUrls.slice(0, 5);
+          const converted = await Promise.all(
+            targets.map(async (url) => {
+              const base64 = await fetchImageAsBase64(url);
+              return base64 || url;
+            })
+          );
+          imagesBase64 = converted.filter((b): b is string => Boolean(b));
+        }
+        return { ...p, imagesBase64 };
+      })
+    ),
+    fetchRelatedDaumNews(combinedQuery),
+  ]);
+
+  const newsPromptBlock =
+    relatedNews.length > 0
+      ? `\n[관련 뉴스 현황 - Daum 뉴스 최신 검색 결과 ${relatedNews.length}건]\n${formatNewsForPrompt(relatedNews)}\n`
+      : '';
 
   const systemPrompt = `
 당신은 SNS 게시글, 카드뉴스, 인스타그램/X 이미지의 "이미지 텍스트 추출(OCR)", "선동성 게시글 판별", "통계 왜곡 및 가짜뉴스/허위정보"를 전문적으로 검증하는 대한민국 최고의 AI 팩트체커 "Detectium"입니다.
@@ -154,7 +167,15 @@ export async function analyzePostsWithOpenAI(
 2단계 - 주장 및 의도 분석:
 - 게시글 본문과 이미지에서 추출한 텍스트 전체를 통합하여 검증 가능한 진술과 글의 의도를 파악합니다.
 
-3단계 - 선동성 및 왜곡 여부 판정:
+3단계 - 관련 뉴스와 비교 검증 (★최우선 판별 기준★):${newsPromptBlock ? `
+- 아래 "[관련 뉴스 현황]"에 나열된 실제 Daum 뉴스 검색 결과와 게시글의 주장을 면밀히 비교합니다.
+- 뉴스 보도 내용과 상반되거나 사실을 과장·왜곡한 주장이 있으면 선동/왜곡으로 판정합니다.
+- 뉴스 보도와 일치하는 사실이라도 선동적 프레이밍(편향된 어휘, 적대감 유발, 출처 은폐)으로 제시한 경우 선동으로 판정합니다.
+- 뉴스 검색 결과에 존재하지 않거나 뉴스와 상충하는 주장은 허위정보로 판정합니다.
+- details 필드에 "○○ 뉴스(언론사명)에 따르면 실제로는 ~이나, 게시글은 ~로 왜곡했습니다" 형태로 근거를 명시하십시오.` : `
+- 관련 뉴스를 찾지 못한 경우, 게시글 자체의 표현·어휘·논리 구조만으로 선동성을 판별합니다.`}
+
+4단계 - 선동성 및 왜곡 여부 판정:
 - 글이 "대중을 선동하는 글"이거나 사실을 왜곡한 경우 즉시 경고 대상으로 분류합니다.
 
 [분석 기준]
@@ -184,7 +205,7 @@ export async function analyzePostsWithOpenAI(
    - riskScore: 0~100 (정상=0~30, 경미한 과장=31~60, 명백한 선동/왜곡/가짜=61~100)
    - category: "선동성 게시글" | "선동 및 여론 조작" | "통계 왜곡" | "가짜뉴스 / 허위사실" | "과장 및 맥락 왜곡" | "정상" 중 택1
    - summary: 판정의 핵심 이유를 1문장으로 요약 (예: "카드뉴스 이미지 속 자극적 허위 수치로 특정 집단에 대한 적대감을 부추기는 선동글")
-   - details: 추출된 이미지 텍스트와 본문에서 어떤 부분이 왜곡되었거나 선동적인지, 실제 사실 관계는 무엇인지를 일반인이 이해하기 쉽게 2~3문장으로 구체적으로 설명
+   - details: 추출된 이미지 텍스트와 본문에서 어떤 부분이 왜곡되었거나 선동적인지, 관련 뉴스와 비교한 실제 사실 관계는 무엇인지를 일반인이 이해하기 쉽게 2~3문장으로 구체적으로 설명
    - checkedPoints: 실제로 검증한 핵심 진술, 선동 표현 또는 확인된 문제 요소 1~3개 배열
 
 [정상 판정 시 작성 규칙]
@@ -211,7 +232,7 @@ export async function analyzePostsWithOpenAI(
   const userContent: ContentPart[] = [];
   userContent.push({
     type: 'text',
-    text: `다음 ${postsWithImages.length}개의 SNS 게시글 목록을 분석해주세요.\n각 게시글의 본문과 첨부된 모든 이미지들을 검토하여, 이미지 속 모든 텍스트(문구, 수치, 자막, 헤드라인 등)를 정확하게 추출(OCR)해 읽고, 선동성 글/허위사실/통계왜곡 여부를 철저하게 팩트체크해주세요.\n`,
+    text: `다음 ${postsWithImages.length}개의 SNS 게시글 목록을 분석해주세요.\n각 게시글의 본문과 첨부된 모든 이미지들을 검토하여, 이미지 속 모든 텍스트(문구, 수치, 자막, 헤드라인 등)를 정확하게 추출(OCR)해 읽고, 선동성 글/허위사실/통계왜곡 여부를 철저하게 팩트체크해주세요.\n${newsPromptBlock}`,
   });
 
   postsWithImages.forEach((p, postIdx) => {
