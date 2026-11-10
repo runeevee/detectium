@@ -36,10 +36,12 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
             height = maxDimension;
           }
         }
-        const canvas = new OffscreenCanvas(width, height);
+
+        // 다운스케일
+        const canvas = new OffscreenCanvas(width / 2, height / 2);
         const ctx = canvas.getContext("2d");
         if (ctx) {
-          ctx.drawImage(bitmap, 0, 0, width, height);
+          ctx.drawImage(bitmap, 0, 0, width / 2, height / 2);
           const resizedBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
           const buffer = await resizedBlob.arrayBuffer();
           return `data:image/jpeg;base64,${arrayBufferToBase64(buffer)}`;
@@ -64,7 +66,7 @@ type ContentPart =
 export async function analyzePostsWithOpenAI(
   posts: PostData[],
   apiKey?: string,
-  detectionThreshold = 70
+  detectionThreshold = 50
 ): Promise<AnalysisResult[]> {
   const effectiveKey = apiKey?.trim() || process.env.OPENAI_API_KEY;
 
@@ -151,7 +153,6 @@ export async function analyzePostsWithOpenAI(
    - 출처 없는 "카더라" 소문, 조작된 캡처본, 음모론을 마치 사실인 양 포장하여 대중을 호도하는 글
    - "충격", "경악", "소름 돋는 진실", "전 국민 분노", "폭로" 등 자극적인 표제로 시작하여 비합리적인 결론과 적개심을 유도하는 카드뉴스/게시글
    - 특정 인물이나 집단을 표적 삼아 흑색선전을 펼치거나 집단적 비난을 유도하는 글
-   -> 위 중 하나라도 해당하면 반드시 isFakeOrMisleading: true, category: "선동성 게시글" (또는 "선동 및 여론 조작"), riskScore: 70~100 부여
 
 2. 통계 왜곡:
    - 상관관계를 인과관계로 비약하거나 억지 주장
@@ -166,9 +167,16 @@ export async function analyzePostsWithOpenAI(
    - 오래된 정보를 최신 사실처럼 제시하거나, 과거 사건의 사진/영상을 현재 사건처럼 사용하는 경우
    - 출처 없는 "카더라" 정보, 전문가·기관 사칭, 존재하지 않는 연구/기관 인용
 
-4. 판별 및 임계값:
-   - isFakeOrMisleading: 위험도 점수가 ${detectionThreshold}점 이상이거나, 선동성 글 / 통계 왜곡 / 허위 사실이 포함되어 독자에게 중대한 오해나 분노/혐오를 유발할 경우 true. 검증 결과 사실에 부합하고 선동성이 없는 글은 false.
-   - riskScore: 0~100 (정상=0~30, 경미한 과장=31~60, 명백한 선동/왜곡/가짜=61~100)
+4. 판별 및 임계값 설정 (★핵심 판별 규칙★):
+   - 현재 필터링 강도 임계값: ${detectionThreshold}점
+     (강도 기준: [약함] 70점 이상 필터링 | [보통] 50점 이상 필터링 | [강함] 40점 이상 필터링)
+   - riskScore 점수 산정 기준 (0~100점):
+     * 0 ~ 39점 (정상/낮은 위험): 사실에 부합하거나 통상적인 개인 의견, 건전한 비판
+     * 40 ~ 49점 (경미한 과장/주의): 자극적 어휘, 부분적 과장, 출처 불분명한 경미한 주장 (강함 강도에서 필터링)
+     * 50 ~ 69점 (보통 위험/왜곡·선동): 악마의 편집, 체리피킹, 통계 왜곡, 대중의 감정적 분노 조장 (보통 이상 강도에서 필터링)
+     * 70 ~ 100점 (높은 위험/명백한 조작·선동): 명백한 허위 사실, 날조된 정보, 노골적인 선동 및 흑색선전 (약함 강도에서도 필터링)
+   - isFakeOrMisleading 판정:
+     * 산출된 riskScore가 ${detectionThreshold}점 이상이면 반드시 true, ${detectionThreshold}점 미만이면 반드시 false로 지정하십시오.
    - category: "선동성 게시글" | "선동 및 여론 조작" | "통계 왜곡" | "가짜뉴스 / 허위사실" | "과장 및 맥락 왜곡" | "정상" 중 택1
    - summary: 판정의 핵심 이유를 1문장으로 요약
    - details: 추출된 이미지 텍스트와 본문에서 어떤 부분이 왜곡되었거나 선동적인지, 실제 사실 관계는 무엇인지를 일반인이 이해하기 쉽게 2~3문장으로 구체적으로 설명

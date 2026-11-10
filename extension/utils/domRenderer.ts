@@ -43,13 +43,7 @@ export function injectWarningBanner(
 
   const isAgitation = result.category.includes("선동");
   const isStatDistortion = result.category.includes("통계");
-
-  let categoryIcon = "🚨";
-  if (isAgitation) {
-    categoryIcon = "📢";
-  } else if (isStatDistortion) {
-    categoryIcon = "📊";
-  }
+  const categoryIcon = isAgitation ? "📢" : isStatDistortion ? "📊" : "🚨";
 
   shadow.innerHTML = `
     <style>
@@ -118,7 +112,7 @@ export function injectWarningBanner(
         border-color: rgba(255,255,255,0.8);
       }
       .summary-preview {
-        font-size: 12px;
+        font-size: 1rem;
         color: rgba(255,255,255,0.85);
         text-align: center;
         max-width: 280px;
@@ -131,14 +125,12 @@ export function injectWarningBanner(
       <div class="warning-title">⚠️ 경고: ${escapeHtml(result.category)}</div>
       <div class="warning-category">${categoryIcon} Detectium AI 판별 · 위험도 ${result.riskScore}%</div>
       <div class="summary-preview">${escapeHtml(result.summary)}</div>
-      <button class="show-anyway-btn">그래도 보기</button>
+      <button class="show-anyway-btn">해당 사실을 인지하고 있으며, 계속 보겠습니다.</button>
     </div>
   `;
 
   const btn = shadow.querySelector(".show-anyway-btn");
-  btn?.addEventListener("click", () => {
-    host.remove();
-  });
+  btn?.addEventListener("click", () => { host.remove(); });
 
   targetElement.appendChild(host);
 }

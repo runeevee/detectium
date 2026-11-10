@@ -1,4 +1,4 @@
-import { extractVisiblePosts } from "../utils/postExtractor";
+import { extractVisiblePosts } from "../utils/extractors";
 import { injectWarningBanner } from "../utils/domRenderer";
 import type { AnalyzePostsRequest, AnalyzePostsResponse, ScannedPostItem } from "../utils/types";
 

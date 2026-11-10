@@ -10,7 +10,7 @@ export default defineBackground(() => {
         updates.isEnabled = true;
       }
       if (result.detectionThreshold === undefined) {
-        updates.detectionThreshold = 70;
+        updates.detectionThreshold = 50;
       }
       if (Object.keys(updates).length > 0) {
         chrome.storage.sync.set(updates);
@@ -65,7 +65,7 @@ export default defineBackground(() => {
         }
 
         const apiKey = typeof storage.apiKey === "string" ? storage.apiKey : undefined;
-        const threshold = typeof storage.detectionThreshold === "number" ? storage.detectionThreshold : 70;
+        const threshold = typeof storage.detectionThreshold === "number" ? storage.detectionThreshold : 50;
 
         try {
           const results = await analyzePostsWithOpenAI(req.posts, apiKey, threshold);
