@@ -55,7 +55,7 @@ export function updateAnalysisStatus(
     pointer-events: none;
   `;
   if (window.location.hostname.includes("instagram.com")) {
-    host.style.transform = "translateY(-10px)";
+    host.style.transform = "translateY(-15px)";
   }
 
   const shadow = host.attachShadow({ mode: "open" });
@@ -116,7 +116,7 @@ export function injectWarningBanner(
     pointer-events: auto;
   `;
   if (window.location.hostname.includes("instagram.com")) {
-    host.style.transform = "translateY(-10px)";
+    host.style.transform = "translateY(-15px)";
   }
 
   const shadow = host.attachShadow({ mode: "open" });
@@ -165,7 +165,7 @@ export function injectWarningBanner(
         color: rgba(255,255,255,0.85);
         text-align: center;
         max-width: 280px;
-        max-height: 60%;
+        margin: 1rem;
         overflow-y: auto;
         line-height: 1.4;
         text-shadow: 0 1px 2px rgba(0,0,0,0.4);
