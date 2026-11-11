@@ -1,28 +1,18 @@
 export interface PostData {
   id: string;
   platform: "x" | "instagram" | "youtube" | "generic";
-  author: string;
-  title?: string;
   content: string;
-  mediaDescription?: string;
   imageUrls?: string[];
-  videoFrames?: VideoFrame[];
-  imagesBase64?: string[];
-  extractedImageText?: string;
-  url?: string;
-  shortcode?: string;
-}
-
-export interface VideoFrame {
-  timestampSeconds: number;
-  dataUrl: string;
 }
 
 export interface AnalysisResult {
   id: string;
   riskScore: number; // 0 ~ 100
-  details: string;
-  checkedPoints?: string[];
+  description: string;
+  analysisContent: {
+    violatedPoints: string[];
+    nonViolatedPoints: string[];
+  };
   extractedImageText?: string;
 }
 
@@ -43,12 +33,8 @@ export interface AnalyzePostsResponse {
 export interface ScannedPostItem {
   id: string;
   platform: "x" | "instagram" | "youtube" | "generic";
-  author: string;
   content: string;
   contentLength: number;
-  url?: string;
-  shortcode?: string;
-  mediaDescription?: string;
   isVisible: boolean;
   extractionSuccess: boolean;
   status: "extracted" | "api_sent" | "analyzed" | "analysis_failed" | "extraction_failed";

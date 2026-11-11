@@ -37,9 +37,7 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
           const buffer = await resizedBlob.arrayBuffer();
           return `data:image/jpeg;base64,${arrayBufferToBase64(buffer)}`;
         }
-      } catch {
-        // 리사이징 실패 시 원본 Blob 사용
-      }
+      } catch { }
     }
 
     const buffer = await blob.arrayBuffer();
@@ -61,9 +59,12 @@ const AnalysisSchema = z.object({
     z.object({
       id: z.string(),
       extractedImageText: z.string(),
-      details: z.string(),
+      description: z.string(),
+      analysisContent: z.object({
+        violatedPoints: z.array(z.string()),
+        nonViolatedPoints: z.array(z.string()),
+      }),
       riskScore: z.int(),
-      checkedPoints: z.array(z.string()),
     })
   ),
 });
@@ -82,27 +83,10 @@ export async function analyzePostsWithOpenAI(
     return [];
   }
 
-  // 캡션이 빈 문자열이거나 작성자 계정명만 포함되어 있는 게시글은 API 전송에서 제외
+  // 캡션과 첨부 이미지가 모두 없는 게시글은 API 전송에서 제외
   const validPosts = posts.filter((p) => {
     const trimmedContent = (p.content || "").trim();
-    const trimmedAuthor = (p.author || "").trim();
-    const hasImages = Boolean((p.imageUrls && p.imageUrls.length > 0) || p.videoFrames?.length);
-
-    if (p.platform === "instagram" && !trimmedContent && !p.videoFrames?.length) {
-      return false;
-    }
-    if (!trimmedContent && !hasImages && (!p.mediaDescription || p.mediaDescription.length < 10)) {
-      return false;
-    }
-    if (
-      trimmedContent &&
-      trimmedAuthor &&
-      (trimmedContent === trimmedAuthor ||
-        trimmedContent.replace(/[@\s]/g, "") === trimmedAuthor.replace(/[@\s]/g, ""))
-    ) {
-      return false;
-    }
-    return true;
+    return trimmedContent.length > 0 || Boolean(p.imageUrls?.length);
   });
 
   if (validPosts.length === 0) {
@@ -133,17 +117,11 @@ export async function analyzePostsWithOpenAI(
         analysisImages.push(...converted);
       }
 
-      p.videoFrames?.slice(0, 3).forEach((frame) => {
-        const timestamp = Math.floor(frame.timestampSeconds);
-        const minutes = Math.floor(timestamp / 60);
-        const seconds = timestamp % 60;
-        analysisImages.push({
-          label: `동영상 프레임 ${minutes}:${String(seconds).padStart(2, "0")}`,
-          dataUrl: frame.dataUrl,
-        });
-      });
-
-      return { ...p, analysisImages };
+      return {
+        id: p.id,
+        content: p.content,
+        analysisImages,
+      };
     })
   );
 
@@ -156,21 +134,32 @@ export async function analyzePostsWithOpenAI(
 riskScore는 0부터 100 사이의 정수이며, 거짓/왜곡성이 강할수록 100에 가까워집니다.
 **게시글을 검증할 때에는 무조건 다음 원칙을 따르세요.**
 
-1. 입력받은 자료를 추출하세요.
-- 첨부된 이미지 / 동영상 프레임에서 확인 가능한 **모든** 텍스트를 추출(OCR)하십시오.
-- 추출한 텍스트는 결과의 "extractedImageText" 필드에 이미지/프레임 출처가 구분되도록 기록하십시오. 영상 프레임은 해당 시각도 포함하십시오.
-- 분석에 전달된 영상 프레임은 영상 전체가 아니라 일부 시점의 샘플이므로, 보지 못한 장면이나 영상 맥락까지 확인한 것처럼 단정하지 마십시오.
+1. 입력받은 캡션과 첨부 이미지로 게시글을 검증하세요.
+- 이미지에서 확인 가능한 **모든** 텍스트를 추출(OCR)하십시오.
+- 추출한 텍스트는 결과의 "extractedImageText" 필드에 이미지 출처가 구분되도록 기록하십시오.
 - 이미지가 없거나 텍스트가 전혀 없는 경우에만 "이미지 내 텍스트 없음"으로 기록하십시오.
 
 2. 일상 게시글 / 순수 재미성 게시글인 경우 검증을 넘어가세요. **다만, 수치 자료가 포함되어있는 경우는 정보성 게시글로 간주합니다.**
 
-3. details에는 [기준]에 **위배되는 것만** 적으세요.
-- 게시글 이미지와 내용이 일치한다 등 위배되지 않는 내용은 **절대로** 적지 마세요.
-- 사용자에게 보여지는 설명이기 때문에 정돈되게 서술해야 합니다.
-  서술시에는 어투를 -다, -입니다, -하기에, -이므로, 체를 사용하세요.
-- 다만, 단어 하나에 꽂히지 말고 그 단어가 쓰인 문맥, 글 전체 흐름을 보고 판단하세요.
+3. analysisContent에는 [기준]별 분석 내용을 나누어 기록하세요.
+- violatedPoints에는 게시글에서 실제로 위반한 기준과 근거를 기록하세요. 위반한 기준이 없으면 빈 배열로 반환하세요.
+- nonViolatedPoints에는 검토했으나 위반하지 않은 기준을 기록하세요. 판단할 자료가 없어 검토할 수 없는 기준은 위반하지 않았다고 단정하지 말고 기록하지 마세요.
+- 각 항목은 해당 기준을 어떻게 적용했는지 알 수 있도록 구체적으로 작성하세요.
+- 게시글에 사실 여부를 확인해야할 주장, 통계, 인용, 사건 정보가 하나라도 있으면 web_search를 반드시 사용해 확인하세요. 확신이 들거나 학습 데이터로 알고 있는 내용이라도 검색을 생략하지 마세요.
+- 주장의 핵심 문구와 날짜·장소·수치 등 구체 정보를 검색어에 포함하고, 검색 결과가 주장을 직접 뒷받침하는지 확인하세요. 논쟁적이거나 현재 상황에 따라 달라지는 주장은 서로 독립적인 신뢰할 만한 출처를 추가로 검색해 교차 확인하세요.
+- 검색 결과에서 확인하지 못한 내용은 사실로 단정하지 말고, 검색 결과만으로 위반 여부를 판단할 수 없으면 위반으로 기록하지 마세요.
 
-[기준](details뿐만 아니라 riskScore를 책정하는데 사용됩니다.)
+4. description에는 이 게시글이 왜 위험 기준에 걸렸는지, 사용자가 판정 근거를 확인할 수 있도록 설명하세요. 게시글이나 이미지의 내용을 소개·요약하는 것으로 대체하지 마세요.
+- violatedPoints가 있으면 각 위반점에 대해 (a) 실제 문제가 된 게시글의 주장이나 표현을 구체적으로 밝히고, (b) 검색으로 확인한 신뢰할 만한 출처와 그 출처가 확인해 주는 사실을 제시하고, (c) 둘 사이의 구체적인 불일치·왜곡·근거 부족이 무엇인지 논리적으로 설명하세요. 이 세 요소 중 하나라도 빠진 일반적인 감상이나 줄거리 요약은 판정 설명으로 인정하지 않습니다.
+- 게시글에 여러 위반점이 있으면 각각의 주장과 근거를 모두 설명하세요. 실제로 위반한 점이 없으면 위험한 게시글처럼 설명하지 말고 "위반한 기준이 없습니다."라고 하세요. 확인 불가를 허위의 증거로 취급하지 마세요.
+- 설명에 게시글 순번(예: "게시글 #3")이나 ID처럼 판정 근거가 아닌 식별 정보를 쓰지 마세요. 입력에 붙은 ID는 결과를 연결하기 위한 내부 정보일 뿐이며 description에 복사하지 마세요.
+- 이미지의 촬영자·촬영일·장면 등은 그 자체가 위반 근거가 아니면 설명에서 언급하지 마세요. 캡션과 무관한 이미지 내용도 나열하지 마세요.
+- 짧은 한 줄 요약으로 축약하지 말고, 사용자가 왜 필터링됐는지 이해하도록 검증 근거와 판단 과정을 충분히 설명하세요. 단, 확인되지 않은 출처나 사실을 만들어내지 마세요.
+- 제목, 소제목, 목록, 번호, 글머리 기호, 마크다운, 줄바꿈, 점수 표기 없이 자연스러운 문단으로 작성하세요. analysisContent 문구를 그대로 복사하지 말고, 근거와 판단 과정을 풀어 쓰세요.
+- 위반한 사항이 없으면 "위반한 기준이 없습니다." 한 문장만 작성하세요.
+- 사용자가 이해하기 쉽게 정돈된 문장으로 작성하고, 어투는 -다, -입니다, -하기에, -이므로 체를 사용하세요.
+
+[기준]
 - 이미지와 게시글이 불일치 하는 경우(총 +35)
   - 이미지 속 내용과 게시글 캡션의 설명이 전혀 다른 경우: +15
   - 이미지 속에서 설명한 내용이 캡션에 교묘하게 바뀌어있는 경우: +20
@@ -178,7 +167,7 @@ riskScore는 0부터 100 사이의 정수이며, 거짓/왜곡성이 강할수�
   - 명백히 사실과 다르거나 조작된 주장: +8
   - 음모론, 확인되지 않은 악의적 루머의 기정사실화: +8
   - 맥락을 악의적으로 잘라내어 오해를 유발하는 글: +8
-  - 오래된 정보를 최신 사실처럼 제시하거나, 과거 사건의 사진/영상을 현재 사건처럼 사용하는 경우: +8
+  - 오래된 정보를 최신 사실처럼 제시하거나, 과거 사건의 사진을 현재 사건처럼 사용하는 경우: +8
   - 출처 없는 "카더라" 정보, 전문가·기관 사칭, 존재하지 않는 연구/기관 인용: +8
 - 통계자료를 가지고 왜곡하여 결론을 도출한 경우(총 +20):
   - 상관관계를 인과관계로 비약하거나 억지 주장: +5
@@ -186,21 +175,21 @@ riskScore는 0부터 100 사이의 정수이며, 거짓/왜곡성이 강할수�
   - 왜곡된 그래프/수치 인용, 출처가 불분명하거나 조작된 통계: +5
   - 단위 왜곡 또는 전체 맥락을 은폐한 퍼센트 과장: +5
 
-4. 이를 바탕으로 riskScore를 책정하세요.
-5. 입력된 모든 게시글에 대해 빠짐없이 results에 하나씩 결과를 반환하세요. id는 입력된 게시글 ID를 그대로 사용하세요.
+5. [기준]을 바탕으로 riskScore를 책정하세요.
+6. 입력된 모든 게시글에 대해 빠짐없이 results에 하나씩 결과를 반환하세요. id는 입력된 게시글 ID를 그대로 사용하세요.
 `.trim();
 
   const userContent: OpenAI.Responses.ResponseInputContent[] = [];
 
   userContent.push({
     type: "input_text",
-    text: `다음 ${postsWithImages.length}개의 SNS 게시글 목록을 분석해주세요.\n각 게시글의 본문, 첨부 이미지, 샘플링된 영상 프레임을 검토하여 화면 속 텍스트(문구, 수치, 자막, 헤드라인 등)를 읽고 선동성 글/허위사실/통계왜곡 여부를 팩트체크해주세요.`,
+    text: `다음 ${postsWithImages.length}개의 SNS 게시글 목록을 분석해주세요.\n각 게시글의 캡션과 첨부 이미지만 검토하여 허위사실/통계왜곡 여부를 팩트체크해주세요.`,
   });
 
-  postsWithImages.forEach((p, postIdx) => {
+  postsWithImages.forEach((p) => {
     userContent.push({
       type: "input_text",
-      text: `\n----------------------------------------\n[게시글 #${postIdx + 1} / ID: ${p.id}]\n- 플랫폼: ${p.platform}\n- 작성자: ${p.author || "알 수 없음"}\n- 본문 내용: ${p.content || "(본문 텍스트 없음 - 아래 첨부 이미지/영상 프레임의 텍스트를 읽고 분석할 것)"}\n- 미디어 정보: ${p.mediaDescription || "없음"}\n- 첨부 이미지 및 영상 프레임 수: ${p.analysisImages.length}개\n`,
+      text: `\n----------------------------------------\n[결과 연결용 ID: ${p.id} — 이 ID를 description에 쓰지 말 것]\n- 캡션: ${p.content || "(캡션 없음)"}\n- 첨부 이미지 수: ${p.analysisImages.length}개\n`,
     });
 
     p.analysisImages.forEach((image) => {
@@ -216,8 +205,7 @@ riskScore는 0부터 100 사이의 정수이며, 거짓/왜곡성이 강할수�
     });
   });
 
-  // responses.parse + zodTextFormat → output_parsed 로 바로 파싱된 객체를 받는다.
-  const response = await client.responses.parse({
+  const response = await client.responses.create({
     model: "gpt-4o-mini",
     instructions,
     input: [{ role: "user", content: userContent }],
@@ -226,13 +214,41 @@ riskScore는 0부터 100 사이의 정수이며, 거짓/왜곡성이 강할수�
     },
     temperature: 0.1,
     tools: [{ type: "web_search" }],
+    tool_choice: "required",
   });
 
-  const parsed = response.output_parsed;
-  if (!parsed) {
-    console.error("[Detectium] OpenAI 응답 파싱 실패:", response.output_text);
-    throw new Error("OpenAI 모델로부터 유효한 응답을 받지 못했습니다.");
+  if (response.status !== "completed") {
+    const reason = response.incomplete_details?.reason;
+    throw new Error(
+      `OpenAI 분석 응답이 완료되지 않았습니다.${reason ? ` 중단 사유: ${reason}` : ""}`
+    );
   }
 
-  return parsed.results as AnalysisResult[];
+  const finalMessage =
+    [...response.output].reverse().find(
+      (item) => item.type === "message" && item.phase === "final_answer"
+    ) ??
+    [...response.output].reverse().find(
+      (item) => item.type === "message" && item.phase !== "commentary"
+    );
+  const finalText =
+    finalMessage?.type === "message"
+      ? finalMessage.content
+          .filter((content) => content.type === "output_text")
+          .map((content) => content.text)
+          .join("")
+      : "";
+
+  if (!finalText) {
+    throw new Error("OpenAI가 최종 분석 결과를 반환하지 않았습니다.");
+  }
+
+  let output: unknown;
+  try {
+    output = JSON.parse(finalText);
+  } catch {
+    throw new Error("OpenAI의 최종 분석 결과가 유효한 JSON 형식이 아닙니다.");
+  }
+
+  return AnalysisSchema.parse(output).results;
 }

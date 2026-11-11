@@ -9,5 +9,5 @@ export interface PostExtractor {
   readonly platform: PostData["platform"];
   canHandle(hostname: string): boolean;
   extractPost(element: HTMLElement): ExtractedPost | null;
-  extractVisiblePosts(forceRescan?: boolean): Promise<ExtractedPost[]>;
+  extractVisiblePosts(): Promise<ExtractedPost[]>;
 }

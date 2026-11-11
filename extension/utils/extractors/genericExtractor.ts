@@ -31,17 +31,12 @@ export function extractGenericPost(article: HTMLElement): ExtractedPost | null {
 
   if (text.length < 30 && imageUrls.length === 0) return null;
 
-  const titleEl = article.querySelector("h1, h2, h3, .title");
-  const title = titleEl ? (titleEl.textContent || "").trim() : "";
-
   const id = `gen-${generateSimpleHash(text.slice(0, 100) + imageUrls.join(""))}`;
 
   return {
     data: {
       id,
       platform: "generic",
-      author: "웹사이트",
-      title,
       content: text.slice(0, 1000),
       imageUrls,
     },

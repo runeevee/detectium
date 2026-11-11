@@ -45,9 +45,7 @@ export function getExtractor(hostname?: string): PostExtractor {
 /**
  * 현재 페이지의 활성 플랫폼 Extractor를 통해 가시 영역의 게시글들을 추출합니다.
  */
-export async function extractVisiblePosts(
-  forceRescan = false
-): Promise<ExtractedPost[]> {
+export async function extractVisiblePosts(): Promise<ExtractedPost[]> {
   const extractor = getExtractor();
-  return extractor.extractVisiblePosts(forceRescan);
+  return extractor.extractVisiblePosts();
 }

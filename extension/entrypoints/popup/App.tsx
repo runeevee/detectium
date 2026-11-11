@@ -35,6 +35,7 @@ export default () => {
   const [loading, setLoading] = createSignal<boolean>(true);
   const [currentPlatform, setCurrentPlatform] = createSignal("확인 중...");
   const [cacheStatus, setCacheStatus] = createSignal<string>("");
+  const [cachedPostCount, setCachedPostCount] = createSignal(0);
 
   const activeLevel = createMemo(() => {
     const step = currentStep();
@@ -101,6 +102,17 @@ export default () => {
     } else {
       setLoading(false);
     }
+
+    if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      chrome.storage.local.get(["scannedPosts"], (res) => {
+        if (chrome.runtime.lastError) {
+          setCacheStatus("캐시 정보를 불러오지 못했습니다.");
+          return;
+        }
+
+        setCachedPostCount(Array.isArray(res.scannedPosts) ? res.scannedPosts.length : 0);
+      });
+    }
   });
 
   // 활성화 / 비활성화 토글 핸들러
@@ -135,6 +147,7 @@ export default () => {
       }
 
       setCacheStatus("캐시가 비워졌습니다.");
+      setCachedPostCount(0);
     });
   };
 
@@ -299,6 +312,8 @@ export default () => {
             <button type="button" class={css.clearCacheBtn} onClick={handleClearCache}>
               게시글 캐시 비우기
             </button>
+
+            <span class={css.cacheStatus}>현재 {cachedPostCount()}개 게시글 캐시됨</span>
 
             <Show when={cacheStatus()}>
               <span class={css.cacheStatus}>{cacheStatus()}</span>

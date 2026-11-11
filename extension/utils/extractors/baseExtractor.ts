@@ -18,58 +18,90 @@ export abstract class BasePostExtractor implements PostExtractor {
    */
   protected async beforeExtract?(_element: HTMLElement): Promise<void>;
 
-  /**
-   * 추출한 게시글에 플랫폼별 미디어 정보를 추가합니다.
-   */
-  protected async enrichPost?(_post: ExtractedPost): Promise<void>;
-
-  /**
-   * 유효한 게시글인지 검증 (본문 5자 이상 or 첨부 이미지 존재 or 미디어 설명 5자 이상)
-   */
+  /** 캡션이 5자 이상이거나 첨부 이미지가 있는 게시글만 추출합니다. */
   protected isValidPost(post: ExtractedPost): boolean {
     const { data } = post;
     return Boolean(
-      (data.content && data.content.length >= 5) ||
-      (data.imageUrls && data.imageUrls.length > 0) ||
-      (data.mediaDescription && data.mediaDescription.length >= 5)
+      data.content.trim().length >= 5 ||
+      data.imageUrls?.length
     );
   }
 
   /**
    * 현재 뷰포트에 표시된 유효 게시글들을 스캔하여 구조화
    */
-  async extractVisiblePosts(forceRescan = false): Promise<ExtractedPost[]> {
+  async extractVisiblePosts(): Promise<ExtractedPost[]> {
     const candidateElements = this.getCandidateElements();
     const extracted: ExtractedPost[] = [];
+    const visibleIndexes = candidateElements
+      .map((element, index) => (isElementInViewport(element) ? index : -1))
+      .filter((index) => index >= 0);
 
-    for (const el of candidateElements) {
+    if (visibleIndexes.length === 0) {
+      return extracted;
+    }
+
+    const firstIndex = Math.max(0, visibleIndexes[0] - 2);
+    const lastIndex = Math.min(
+      candidateElements.length - 1,
+      visibleIndexes[visibleIndexes.length - 1] + 2
+    );
+    const visibleIndexSet = new Set(visibleIndexes);
+    const viewportCenterY = window.innerHeight / 2;
+    const prioritizedCandidates = candidateElements
+      .slice(firstIndex, lastIndex + 1)
+      .map((element, offset) => ({ element, index: firstIndex + offset }))
+      .sort((a, b) => {
+        const aVisible = visibleIndexSet.has(a.index);
+        const bVisible = visibleIndexSet.has(b.index);
+        if (aVisible !== bVisible) {
+          return aVisible ? -1 : 1;
+        }
+
+        if (!aVisible) {
+          const aDistance =
+            a.index < visibleIndexes[0]
+              ? visibleIndexes[0] - a.index
+              : a.index - visibleIndexes[visibleIndexes.length - 1];
+          const bDistance =
+            b.index < visibleIndexes[0]
+              ? visibleIndexes[0] - b.index
+              : b.index - visibleIndexes[visibleIndexes.length - 1];
+          if (aDistance !== bDistance) {
+            return aDistance - bDistance;
+          }
+        }
+
+        const aRect = a.element.getBoundingClientRect();
+        const bRect = b.element.getBoundingClientRect();
+        const aDistance = Math.abs((aRect.top + aRect.bottom) / 2 - viewportCenterY);
+        const bDistance = Math.abs((bRect.top + bRect.bottom) / 2 - viewportCenterY);
+        return aDistance - bDistance;
+      });
+
+    for (const { element: el } of prioritizedCandidates) {
       // 이미 분석 진행 중인 경우 스킵
       if (el.dataset.detectiumStatus === "pending") {
         continue;
       }
 
-      if (el.dataset.detectiumStatus === "failed" && !forceRescan) {
+      if (el.dataset.detectiumStatus === "skipped") {
+        continue;
+      }
+
+      if (el.dataset.detectiumStatus === "failed") {
         continue;
       }
 
       // 이미 분석 완료된 경우
       if (el.dataset.detectiumStatus === "done") {
-        if (forceRescan) {
-          delete el.dataset.detectiumStatus;
-        } else {
-          // 카드뉴스 다음 슬라이드 등으로 새 이미지가 추가되었는지 확인
-          const prevCount = parseInt(el.dataset.detectiumImageCount || "0", 10);
-          const currentImagesCount = this.getImageUrls(el).length;
-          if (currentImagesCount <= prevCount) {
-            continue;
-          }
-          delete el.dataset.detectiumStatus;
+        // 카드뉴스 다음 슬라이드 등으로 새 이미지가 추가되었는지 확인
+        const prevCount = parseInt(el.dataset.detectiumImageCount || "0", 10);
+        const currentImagesCount = this.getImageUrls(el).length;
+        if (currentImagesCount <= prevCount) {
+          continue;
         }
-      }
-
-      // 뷰포트 내에 보이는지 검사
-      if (!isElementInViewport(el)) {
-        continue;
+        delete el.dataset.detectiumStatus;
       }
 
       // 추출 전 전처리 (예: 본문 펼치기)
@@ -79,9 +111,6 @@ export abstract class BasePostExtractor implements PostExtractor {
 
       const parsed = this.extractPost(el);
       if (parsed && this.isValidPost(parsed)) {
-        if (this.enrichPost) {
-          await this.enrichPost(parsed);
-        }
         extracted.push(parsed);
       }
     }

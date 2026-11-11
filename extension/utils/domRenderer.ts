@@ -91,7 +91,6 @@ export function updateAnalysisStatus(
 export function injectWarningBanner(
   targetElement: HTMLElement,
   result: AnalysisResult,
-  _highlightColor?: string,
   onDismiss?: () => void
 ) {
   // 이미 경고창이 삽입되어 있는지 확인
@@ -111,7 +110,7 @@ export function injectWarningBanner(
   host.style.cssText = `
     position: absolute;
     inset: -${targetStyle.borderTopWidth} -${targetStyle.borderRightWidth} -${targetStyle.borderBottomWidth} -${targetStyle.borderLeftWidth};
-    z-index: 100;
+    z-index: 1;
     border-radius: ${targetStyle.borderRadius};
     pointer-events: auto;
   `;
@@ -120,12 +119,14 @@ export function injectWarningBanner(
   }
 
   const shadow = host.attachShadow({ mode: "open" });
+  const description = result.description.replace(/\s+/g, " ").trim();
 
   shadow.innerHTML = `
     <style>
       :host {
         all: initial;
         display: block;
+        container-type: size;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       }
       .overlay {
@@ -137,20 +138,31 @@ export function injectWarningBanner(
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 12px;
-        padding: 20px;
+        gap: clamp(4px, 2cqh, 12px);
+        padding: clamp(4px, 3cqh, 20px);
         box-sizing: border-box;
         backdrop-filter: blur(2px);
         -webkit-backdrop-filter: blur(2px);
       }
+      .analysis-preview {
+        font-size: clamp(0.65rem, 3cqh, 1rem);
+        color: rgba(255,255,255,0.85);
+        text-align: left;
+        max-width: min(360px, 100%);
+        margin: clamp(2px, 2cqh, 1rem);
+        line-height: 1.4;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
       .show-anyway-btn {
-        margin-top: 4px;
+        margin-top: 0;
         background: rgba(255,255,255,0.15);
         color: #fff;
         border: 1.5px solid rgba(255,255,255,0.5);
-        font-size: 13px;
+        font-size: clamp(0.6rem, 2.5cqh, 13px);
         font-weight: 600;
-        padding: 8px 20px;
+        padding: clamp(4px, 1.5cqh, 8px) clamp(8px, 3cqi, 20px);
         border-radius: 20px;
         cursor: pointer;
         transition: background 0.15s, border-color 0.15s;
@@ -160,30 +172,23 @@ export function injectWarningBanner(
         background: rgba(255,255,255,0.28);
         border-color: rgba(255,255,255,0.8);
       }
-      .details-preview {
-        font-size: 1rem;
-        color: rgba(255,255,255,0.85);
-        text-align: center;
-        max-width: 280px;
-        margin: 1rem;
-        overflow-y: auto;
-        line-height: 1.4;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
     </style>
     <div class="overlay">
-      <div class="details-preview">${escapeHtml(result.details)}</div>
+      <div class="analysis-preview">
+        <div>${escapeHtml(description)}</div>
+      </div>
       <button class="show-anyway-btn">해당 사실을 인지하고 있으며, 계속 보겠습니다.</button>
     </div>
   `;
 
-  const btn = shadow.querySelector(".show-anyway-btn");
-  btn?.addEventListener("click", () => {
+  shadow.querySelector(".show-anyway-btn")?.addEventListener("click", () => {
     host.remove();
     onDismiss?.();
   });
 
   targetElement.appendChild(host);
+}
+
+export function removeWarningBanner(targetElement: HTMLElement) {
+  targetElement.querySelector(".detectium-overlay-host")?.remove();
 }

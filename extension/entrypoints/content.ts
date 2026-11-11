@@ -1,5 +1,9 @@
 import { extractVisiblePosts } from "../utils/extractors";
-import { injectWarningBanner, updateAnalysisStatus } from "../utils/domRenderer";
+import {
+  injectWarningBanner,
+  removeWarningBanner,
+  updateAnalysisStatus,
+} from "../utils/domRenderer";
 import type {
   AnalysisResult,
   AnalyzePostsRequest,
@@ -21,13 +25,10 @@ export default defineContentScript({
     }
     contentGlobal[initializedKey] = true;
 
-    const BATCH_SIZE = 3;
-    const MAX_STORED_POSTS = 25;
     const BACKGROUND_TIMEOUT_MS = 90_000;
     const DEFAULT_DETECTION_THRESHOLD = 50;
 
     let isExtensionActive = true;
-    let highlightColor = "#4f46e5";
     let detectionThreshold = DEFAULT_DETECTION_THRESHOLD;
 
     // 진행 중인 분석 요청 관리
@@ -41,9 +42,31 @@ export default defineContentScript({
       if (dismissedWarningPostIds.has(postKey)) {
         return;
       }
-
-      injectWarningBanner(element, result, highlightColor, () => {
+      injectWarningBanner(element, result, () => {
         dismissedWarningPostIds.add(postKey);
+      });
+    };
+
+    const renderAnalysisResult = (element: HTMLElement, result: AnalysisResult, postKey: string) => {
+      element.dataset.detectiumPostKey = postKey;
+      element.dataset.detectiumStatus = "done";
+
+      if (typeof result.riskScore === "number" && result.riskScore >= detectionThreshold) {
+        updateAnalysisStatus(element, "failed");
+        showWarningBanner(element, result, postKey);
+      } else {
+        updateAnalysisStatus(element, "passed");
+        removeWarningBanner(element);
+      }
+    };
+
+    const refreshAnalyzedPostDisplays = () => {
+      document.querySelectorAll<HTMLElement>("[data-detectium-post-key]").forEach((element) => {
+        const postKey = element.dataset.detectiumPostKey;
+        const result = postKey ? analysisResultsByPostId.get(postKey) : undefined;
+        if (postKey && result) {
+          renderAnalysisResult(element, result, postKey);
+        }
       });
     };
 
@@ -62,12 +85,10 @@ export default defineContentScript({
 
         const items: ScannedPostItem[] = Array.isArray(res?.scannedPosts) ? res.scannedPosts : [];
         items.forEach((item) => {
-          if (item.status === "analyzed") {
+          if (item.status === "analyzed" && typeof item.analysisResult?.description === "string") {
             const key = getPostKey(item);
             analyzedPostIds.add(key);
-            if (item.analysisResult) {
-              analysisResultsByPostId.set(key, item.analysisResult);
-            }
+            analysisResultsByPostId.set(key, item.analysisResult);
           }
         });
         resolve();
@@ -76,15 +97,13 @@ export default defineContentScript({
 
     // 스토리지 설정 동기화
     const syncSettings = () => {
-      chrome.storage.sync.get(["isEnabled", "highlightColor", "detectionThreshold"], (result) => {
+      chrome.storage.sync.get(["isEnabled", "detectionThreshold"], (result) => {
         if (typeof result.isEnabled === "boolean") {
           isExtensionActive = result.isEnabled;
         }
-        if (typeof result.highlightColor === "string") {
-          highlightColor = result.highlightColor;
-        }
         if (typeof result.detectionThreshold === "number") {
           detectionThreshold = result.detectionThreshold;
+          refreshAnalyzedPostDisplays();
         }
       });
     };
@@ -96,11 +115,9 @@ export default defineContentScript({
         if (changes.isEnabled && typeof changes.isEnabled.newValue === "boolean") {
           isExtensionActive = changes.isEnabled.newValue;
         }
-        if (changes.highlightColor && typeof changes.highlightColor.newValue === "string") {
-          highlightColor = changes.highlightColor.newValue;
-        }
         if (changes.detectionThreshold && typeof changes.detectionThreshold.newValue === "number") {
           detectionThreshold = changes.detectionThreshold.newValue;
+          refreshAnalyzedPostDisplays();
         }
       }
     });
@@ -131,8 +148,7 @@ export default defineContentScript({
                 });
 
                 const merged = Array.from(map.values())
-                  .sort((a, b) => b.timestamp - a.timestamp)
-                  .slice(0, MAX_STORED_POSTS);
+                  .sort((a, b) => b.timestamp - a.timestamp);
 
                 chrome.storage.local.set({ scannedPosts: merged }, () => resolve());
               });
@@ -152,12 +168,8 @@ export default defineContentScript({
     ): ScannedPostItem => ({
       id: data.id,
       platform: data.platform,
-      author: data.author,
       content: data.content,
       contentLength: data.content.length,
-      url: data.url,
-      shortcode: data.shortcode,
-      mediaDescription: data.mediaDescription,
       isVisible: true,
       extractionSuccess: true,
       status,
@@ -200,7 +212,6 @@ export default defineContentScript({
         display: flex;
         flex-direction: column;
         gap: 6px;
-        border-left: 4px solid ${highlightColor};
         opacity: 0;
         transform: translateY(10px);
         transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -245,129 +256,25 @@ export default defineContentScript({
     // 팩트체크 대상 검증
     const isValidFactCheckTarget = (data: PostData): boolean => {
       const trimmedContent = data.content.trim();
-      const trimmedAuthor = (data.author || "").trim();
-
-      if (data.platform === "instagram" && trimmedContent.length === 0 && !data.videoFrames?.length) {
-        return false;
-      }
-      if (trimmedContent.length === 0 && (!data.mediaDescription || data.mediaDescription.length < 10)) {
-        return false;
-      }
-      if (
-        trimmedContent === trimmedAuthor ||
-        trimmedContent.replace(/[@\s]/g, "") === trimmedAuthor.replace(/[@\s]/g, "")
-      ) {
-        return false;
-      }
-
-      return true;
+      return trimmedContent.length > 0 || Boolean(data.imageUrls?.length);
     };
 
-    let isAnalyzing = false;
     let activeScan: Promise<void> | null = null;
+    let scanRequestedWhileActive = false;
 
-    const scheduleNextBatch = (remaining: number) => {
-      if (remaining > BATCH_SIZE) {
-        setTimeout(() => {
-          void scanAndAnalyzeVisiblePosts(false);
-        }, 1000);
-      }
-    };
-
-    const scanAndAnalyzeVisiblePosts = (forceRescan = false): Promise<void> => {
-      if (activeScan) {
-        return activeScan;
-      }
-
-      activeScan = runScanAndAnalyzeVisiblePosts(forceRescan)
-        .catch((error: unknown) => {
-          console.error("[Detectium] 스캔 오류:", error);
-        })
-        .finally(() => {
-          activeScan = null;
-        });
-      return activeScan;
-    };
-
-    const runScanAndAnalyzeVisiblePosts = async (forceRescan = false): Promise<void> => {
-      if (!isExtensionActive || (isAnalyzing && !forceRescan)) {
-        return;
-      }
-
-      await storedScannedPostsReady;
-
-      if (forceRescan) {
-        document.querySelectorAll<HTMLElement>("[data-detectium-status]").forEach((el) => {
-          delete el.dataset.detectiumStatus;
-          updateAnalysisStatus(el, null);
-        });
-      }
-
-      const extracted: unknown = await (extractVisiblePosts as (force?: boolean) => unknown)(forceRescan);
-      if (!Array.isArray(extracted)) {
-        return;
-      }
-
-      const visibleCandidates = extracted as Array<{ data: PostData; element: HTMLElement }>;
-      if (visibleCandidates.length === 0) {
-        return;
-      }
-
-      const seenPostIds = new Set<string>();
-      const duplicateIds: string[] = [];
-      const alreadyAnalyzedIds: string[] = [];
-      const candidatesToAnalyze = visibleCandidates.filter(({ data, element }) => {
-        const key = getPostKey(data);
-        if (seenPostIds.has(key)) {
-          duplicateIds.push(key);
-          return false;
-        }
-        seenPostIds.add(key);
-
-        if (forceRescan || !analyzedPostIds.has(key)) {
-          return true;
-        }
-
-        element.dataset.detectiumStatus = "done";
-        const previousResult = analysisResultsByPostId.get(key);
-        if (previousResult && previousResult.riskScore >= detectionThreshold) {
-          updateAnalysisStatus(element, "failed");
-          showWarningBanner(element, previousResult, key);
-        } else {
-          updateAnalysisStatus(element, "passed");
-        }
-        alreadyAnalyzedIds.push(key);
-        return false;
-      });
-
-      if (duplicateIds.length > 0 || alreadyAnalyzedIds.length > 0) {
-        console.debug("[Detectium] 중복 게시물 건너뜀", {
-          duplicateIds,
-          alreadyAnalyzedIds,
-        });
-      }
-
-      if (candidatesToAnalyze.length === 0) {
-        return;
-      }
-
-      const batchToProcess = candidatesToAnalyze.slice(0, BATCH_SIZE);
-
-      batchToProcess.forEach(({ data, element }) => {
-        element.dataset.detectiumStatus = "pending";
-        pendingElementsMap.set(data.id, element);
-      });
-
+    const analyzePosts = async (
+      postsToAnalyze: Array<{ data: PostData; element: HTMLElement }>
+    ): Promise<void> => {
       // 1. 추출 완료된 게시글 스토리지 동기화
       saveOrUpdateScannedPosts(
-        batchToProcess.map(({ data, element }) =>
+        postsToAnalyze.map(({ data, element }) =>
           buildScannedItem(data, "extracted", { domSelector: describeElement(element) })
         )
       );
 
       // 2. 유효 텍스트 검증
-      const validPostsToSend: typeof batchToProcess = [];
-      batchToProcess.forEach((candidate) => {
+      const validPostsToSend: typeof postsToAnalyze = [];
+      postsToAnalyze.forEach((candidate) => {
         if (isValidFactCheckTarget(candidate.data)) {
           validPostsToSend.push(candidate);
         } else {
@@ -376,25 +283,6 @@ export default defineContentScript({
           pendingElementsMap.delete(candidate.data.id);
         }
       });
-
-      if (validPostsToSend.length === 0) {
-        scheduleNextBatch(candidatesToAnalyze.length);
-        return;
-      }
-
-      const postsPayload = validPostsToSend.map((item) => item.data);
-      isAnalyzing = true;
-      validPostsToSend.forEach(({ element }) => updateAnalysisStatus(element, "loading"));
-      console.info("[Detectium] 게시물 분석 요청", {
-        posts: postsPayload.map(({ platform, id }) => `${platform}:${id}`),
-      });
-
-      // API 전송 상태로 스토리지 업데이트
-      saveOrUpdateScannedPosts(
-        validPostsToSend.map(({ data, element }) =>
-          buildScannedItem(data, "api_sent", { domSelector: element.tagName.toLowerCase() })
-        )
-      );
 
       const handleFailure = (
         reason: string,
@@ -412,6 +300,23 @@ export default defineContentScript({
       };
 
       try {
+        if (validPostsToSend.length === 0) {
+          return;
+        }
+
+        const postsPayload = validPostsToSend.map((item) => item.data);
+        validPostsToSend.forEach(({ element }) => updateAnalysisStatus(element, "loading"));
+        console.info("[Detectium] 게시물 분석 요청", {
+          posts: postsPayload.map(({ platform, id }) => `${platform}:${id}`),
+        });
+
+        // API 전송 상태로 스토리지 업데이트
+        saveOrUpdateScannedPosts(
+          validPostsToSend.map(({ data, element }) =>
+            buildScannedItem(data, "api_sent", { domSelector: element.tagName.toLowerCase() })
+          )
+        );
+
         const payload: AnalyzePostsRequest = {
           type: "ANALYZE_POSTS_REQUEST",
           posts: postsPayload,
@@ -449,22 +354,16 @@ export default defineContentScript({
           response.results.forEach((result) => {
             const el = pendingElementsMap.get(result.id);
             const postCandidate = validPostsToSend.find((p) => p.data.id === result.id);
-            if (el) {
-              el.dataset.detectiumStatus = "done";
-
-              if (typeof result.riskScore === "number" && result.riskScore >= detectionThreshold) {
-                updateAnalysisStatus(el, "failed");
-                showWarningBanner(el, result, postCandidate ? getPostKey(postCandidate.data) : result.id);
-              } else {
-                updateAnalysisStatus(el, "passed");
-              }
-            }
-
             if (postCandidate) {
               const key = getPostKey(postCandidate.data);
               analyzedPostIds.add(key);
               analysisResultsByPostId.set(key, result);
+              if (el) {
+                renderAnalysisResult(el, result, key);
+              }
               analyzedItems.push(buildScannedItem(postCandidate.data, "analyzed", { analysisResult: result }));
+            } else if (el) {
+              renderAnalysisResult(el, result, result.id);
             }
           });
 
@@ -494,19 +393,92 @@ export default defineContentScript({
         console.error("[Detectium] 분석 실행 중 오류:", err);
         handleFailure(err instanceof Error ? err.message : "실행 오류");
       } finally {
-        isAnalyzing = false;
-        batchToProcess.forEach(({ data }) => pendingElementsMap.delete(data.id));
-        scheduleNextBatch(candidatesToAnalyze.length);
+        postsToAnalyze.forEach(({ data }) => pendingElementsMap.delete(data.id));
       }
     };
 
-    // 트리거: 스크롤 정지 / SPA 이동 / 초기 로딩 / DOM 변화
-    let scrollStopTimer: ReturnType<typeof setTimeout> | null = null;
+    const scanAndAnalyzeVisiblePosts = (): Promise<void> => {
+      if (activeScan) {
+        scanRequestedWhileActive = true;
+        return activeScan;
+      }
+
+      activeScan = runScanAndAnalyzeVisiblePosts()
+        .catch((error: unknown) => {
+          console.error("[Detectium] 스캔 오류:", error);
+        })
+        .finally(() => {
+          activeScan = null;
+          if (scanRequestedWhileActive) {
+            scanRequestedWhileActive = false;
+            void scanAndAnalyzeVisiblePosts();
+          }
+        });
+      return activeScan;
+    };
+
+    const runScanAndAnalyzeVisiblePosts = async (): Promise<void> => {
+      if (!isExtensionActive) {
+        return;
+      }
+      await storedScannedPostsReady;
+
+      const extracted: unknown = await extractVisiblePosts();
+      if (!Array.isArray(extracted)) {
+        return;
+      }
+
+      const visibleCandidates = extracted as Array<{ data: PostData; element: HTMLElement }>;
+      if (visibleCandidates.length === 0) {
+        return;
+      }
+
+      const seenPostIds = new Set<string>();
+      const duplicateIds: string[] = [];
+      const alreadyAnalyzedIds: string[] = [];
+      const candidatesToAnalyze = visibleCandidates.filter(({ data, element }) => {
+        const key = getPostKey(data);
+        element.dataset.detectiumPostKey = key;
+        if (seenPostIds.has(key)) {
+          duplicateIds.push(key);
+          return false;
+        }
+        seenPostIds.add(key);
+
+        if (!analyzedPostIds.has(key)) {
+          return true;
+        }
+
+        element.dataset.detectiumStatus = "done";
+        const previousResult = analysisResultsByPostId.get(key);
+        if (previousResult) {
+          renderAnalysisResult(element, previousResult, key);
+        }
+        alreadyAnalyzedIds.push(key);
+        return false;
+      });
+
+      if (duplicateIds.length > 0 || alreadyAnalyzedIds.length > 0) {
+        console.debug("[Detectium] 중복 게시물 건너뜀", {
+          duplicateIds,
+          alreadyAnalyzedIds,
+        });
+      }
+
+      if (candidatesToAnalyze.length === 0) {
+        return;
+      }
+
+      candidatesToAnalyze.forEach(({ data, element }) => {
+        element.dataset.detectiumStatus = "pending";
+        pendingElementsMap.set(data.id, element);
+      });
+      void analyzePosts(candidatesToAnalyze);
+    };
+
+    // 트리거: 스크롤 / SPA 이동 / 초기 로딩 / DOM 변화
     const handleScroll = () => {
-      if (scrollStopTimer) clearTimeout(scrollStopTimer);
-      scrollStopTimer = setTimeout(() => {
-        void scanAndAnalyzeVisiblePosts(false);
-      }, 1500);
+      void scanAndAnalyzeVisiblePosts();
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -517,7 +489,7 @@ export default defineContentScript({
       if (currentUrl === lastObservedUrl) return;
       lastObservedUrl = currentUrl;
       setTimeout(() => {
-        void scanAndAnalyzeVisiblePosts(false);
+        void scanAndAnalyzeVisiblePosts();
       }, 900);
     };
 
@@ -525,7 +497,7 @@ export default defineContentScript({
     window.addEventListener("hashchange", handleSpaNavigation);
 
     setTimeout(() => {
-      void scanAndAnalyzeVisiblePosts(false);
+      void scanAndAnalyzeVisiblePosts();
     }, 1200);
 
     let mutationDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -533,7 +505,7 @@ export default defineContentScript({
       handleSpaNavigation();
       if (mutationDebounceTimer) clearTimeout(mutationDebounceTimer);
       mutationDebounceTimer = setTimeout(() => {
-        void scanAndAnalyzeVisiblePosts(false);
+        void scanAndAnalyzeVisiblePosts();
       }, 900);
     });
 
@@ -546,12 +518,6 @@ export default defineContentScript({
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.type === "PING") {
         sendResponse({ status: "PONG", url: window.location.href });
-        return;
-      }
-
-      if (message.type === "TRIGGER_SCAN") {
-        sendResponse({ success: true, accepted: true });
-        void scanAndAnalyzeVisiblePosts(true);
         return;
       }
 
