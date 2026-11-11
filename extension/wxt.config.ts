@@ -9,7 +9,7 @@ export default defineConfig({
   manifest: {
     name: "Detectium",
     description: "",
-    permissions: ["storage", "contextMenus", "activeTab"],
+    permissions: ["storage", "contextMenus", "activeTab", "downloads"],
     host_permissions: [
       "https://api.openai.com/*",
       "*://*.cdninstagram.com/*",

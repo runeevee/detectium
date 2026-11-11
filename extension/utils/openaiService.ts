@@ -1,5 +1,15 @@
 import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
+import z from "zod";
 import type { PostData, AnalysisResult } from "./types";
+
+async function downloadBase64Image(dataUrl: string, filename: string) {
+  // await chrome.downloads.download({
+  //   url: dataUrl,
+  //   filename,
+  //   saveAs: false,
+  // });
+}
 
 // ArrayBuffer -> Base64 안전 변환 (대용량 이미지 콜스택 초과 방지)
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -21,28 +31,18 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
     const blob = await res.blob();
     const mime = blob.type || "image/jpeg";
 
-    // OffscreenCanvas 지원 시 브라우저 환경에서 이미지 다운스케일링 (최대 1024px, 토큰 절약 및 OCR 정확도)
+    // OffscreenCanvas 지원 시 브라우저 환경에서 이미지 다운스케일
     if (typeof OffscreenCanvas !== "undefined" && typeof createImageBitmap !== "undefined") {
       try {
         const bitmap = await createImageBitmap(blob);
-        const maxDimension = 1024;
         let { width, height } = bitmap;
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
-        }
 
         // 다운스케일
         const canvas = new OffscreenCanvas(width / 2, height / 2);
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.drawImage(bitmap, 0, 0, width / 2, height / 2);
-          const resizedBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+          const resizedBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.2 });
           const buffer = await resizedBlob.arrayBuffer();
           return `data:image/jpeg;base64,${arrayBufferToBase64(buffer)}`;
         }
@@ -123,6 +123,10 @@ export async function analyzePostsWithOpenAI(
         const converted = await Promise.all(
           targets.map(async (url, index) => {
             const base64 = await fetchImageAsBase64(url);
+            if (base64) {
+              await downloadBase64Image(base64, `converted-${index + 1}.jpg`);
+            }
+            
             return {
               label: `이미지 #${index + 1}`,
               dataUrl: base64 || url,
@@ -230,20 +234,33 @@ riskScore는 0부터 100 사이의 정수이며, 거짓/왜곡성이 강할수�
     }
   });
 
-  const response = await client.chat.completions.create({
+  const ResponseFormat = z.object({
+    id: z.string(),
+    extractedImageText: z.string(),
+    details: z.string(),
+    riskScore: z.int(),
+    checkedPoints: z.array(z.string()),
+  });
+
+  const response = await client.responses.create({
     model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
+    text: {
+      format: zodTextFormat(ResponseFormat, "results"),
+    },
     temperature: 0.1,
-    messages: [
+    input: [
       { role: "system", content: systemPrompt },
       {
         role: "user",
         content: userContent as any,
       },
     ],
+    tools: [
+      { type: "web_search", },
+    ],
   });
 
-  const content = response.choices[0]?.message?.content;
+  const content = response.output_text;
   if (!content) {
     throw new Error("OpenAI 모델로부터 응답을 받지 못했습니다.");
   }

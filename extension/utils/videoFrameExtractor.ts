@@ -28,7 +28,7 @@ function captureFrame(video: HTMLVideoElement): string | null {
   }
 
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.85);
+  return canvas.toDataURL("image/jpeg", 0.2);
 }
 
 function seekTo(video: HTMLVideoElement, timestampSeconds: number): Promise<boolean> {
