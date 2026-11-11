@@ -1,4 +1,4 @@
-import { analyzePostsWithOpenAI } from "../utils/openaiService";
+import { analyzePostsWithOpenAI } from "../utils/openai-service";
 import type { AnalyzePostsRequest, AnalyzePostsResponse } from "../utils/types";
 
 export default defineBackground(() => {

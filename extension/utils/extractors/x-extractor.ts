@@ -1,5 +1,5 @@
 import type { ExtractedPost } from "./types";
-import { BasePostExtractor } from "./baseExtractor";
+import { BasePostExtractor } from "./base-extractor";
 import { generateSimpleHash, isClickableMoreButton, wait } from "./common";
 
 /**

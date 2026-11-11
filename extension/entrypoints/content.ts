@@ -3,7 +3,7 @@ import {
   injectWarningBanner,
   removeWarningBanner,
   updateAnalysisStatus,
-} from "../utils/domRenderer";
+} from "../utils/dom-renderer";
 import type {
   AnalysisResult,
   AnalyzePostsRequest,
