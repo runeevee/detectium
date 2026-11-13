@@ -1,192 +1,87 @@
 .popupBox {
-  width: 320px;
-  background-color: #ffffff;
-  border-radius: 16px;
+  width: 10rem;
+  background-color: var(--bg-color, #ffffff);
   box-sizing: border-box;
-  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  font-family: "KoPub World Dotum", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #1e293b;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  gap: 1rem;
+  font-family: "KoPub World Dotum";
+  color: var(--txt-color, #1e293b);
 }
 
-/* Material Icons 기본 클래스 */
-.materialIcon {
-  font-family: "Material Icons";
-  font-weight: normal;
-  font-style: normal;
-  font-size: 20px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  font-feature-settings: "liga";
-  -webkit-font-smoothing: antialiased;
-  vertical-align: middle;
-}
-
-/* 팝업 헤더 */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 0.75rem;
+  border-bottom: 0.0625rem solid #f1f5f9;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .brandIcon {
   color: #4f46e5;
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .brandTitle {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.01875rem;
   color: #0f172a;
 }
 
-.statusIndicator {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 3px 9px;
-  border-radius: 9999px;
-  transition: all 0.2s ease;
-}
-
-.statusIndicator.active {
-  background-color: #ecfdf5;
-  color: #059669;
-}
-
-.statusIndicator.inactive {
-  background-color: #f1f5f9;
-  color: #64748b;
-}
-
-.statusDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: currentColor;
-}
-
-/* 섹션 공통 */
-.section {
+.platformSection {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.platformCard {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 11px 14px;
-}
-
-.platformIconWrap {
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background-color: #e0e7ff;
-}
-
-.platformIcon {
-  color: #4f46e5;
-  font-size: 19px;
-}
-
-.platformInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  gap: 0.3125rem;
 }
 
 .platformLabel {
-  font-size: 11px;
+  font-size: 0.6875rem;
+  color: #64748b;
+}
+
+.platformValue {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  min-height: 1.375rem;
+}
+
+.platformLogo,
+.platformFallbackIcon {
+  width: 1.1875rem;
+  height: 1.1875rem;
+  flex: 0 0 1.1875rem;
+}
+
+.platformFallbackIcon {
   color: #64748b;
 }
 
 .platformName {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: #0f172a;
 }
 
-.sectionHeader {
+.section {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.sectionTitleWrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sectionIcon {
-  font-size: 18px;
-  color: #64748b;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .sectionTitle {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: #334155;
 }
 
-/* 1. 활성화 / 비활성화 라운드 토글 스위치 */
-.toggleCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 12px 14px;
-  transition: all 0.2s ease;
-}
-
-.toggleInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.toggleLabel {
-  font-size: 13px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.toggleSubLabel {
-  font-size: 11px;
-  color: #64748b;
-}
-
-/* 토글 스위치 마크업 */
 .switchContainer {
   position: relative;
   display: inline-flex;
@@ -202,12 +97,11 @@
   height: 0;
 }
 
-/* 라운드 바 (트랙) */
 .switchTrack {
-  width: 50px;
-  height: 28px;
+  width: 3.125rem;
+  height: 1.75rem;
   background-color: #cbd5e1;
-  border-radius: 9999px;
+  border-radius: 50rem;
   position: relative;
   transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
@@ -217,245 +111,113 @@
   background-color: #4f46e5;
 }
 
-/* 동그라미 (원형 썸) */
 .switchThumb {
-  width: 22px;
-  height: 22px;
+  width: 1.375rem;
+  height: 1.375rem;
   background-color: #ffffff;
   border-radius: 50%;
   position: absolute;
-  top: 3px;
-  left: 3px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  top: 0.1875rem;
+  left: 0.1875rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.2);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .switchInput:checked + .switchTrack .switchThumb {
-  transform: translateX(22px);
+  transform: translateX(1.375rem);
 }
 
-/* 2. 필터링 강도 3단계 슬라이드 바 */
-.strengthCard {
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 14px;
+.cacheSection {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0.5rem;
 }
 
-.strengthValueBadge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  background-color: #e0e7ff;
-  color: #4338ca;
-}
-
-/* 슬라이더 트랙 컨테이너 */
-.sliderWrapper {
-  position: relative;
-  padding: 8px 6px 4px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* 가로 라인 위의 3단계 슬라이더 */
-.sliderTrackLine {
-  position: absolute;
-  top: 17px;
-  left: 12px;
-  right: 12px;
-  height: 4px;
-  background-color: #e2e8f0;
-  border-radius: 2px;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.sliderTrackFill {
-  height: 100%;
-  background-color: #4f46e5;
-  border-radius: 2px;
-  transition: width 0.2s ease;
-}
-
-/* 3단계 스텝 눈금 점 */
-.sliderStepDots {
-  position: absolute;
-  top: 15px;
-  left: 12px;
-  right: 12px;
-  display: flex;
-  justify-content: space-between;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.stepDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #cbd5e1;
-  transition: background-color 0.2s ease;
-}
-
-.stepDot.active {
-  background-color: #4f46e5;
-}
-
-/* 실제 인터랙션용 range input */
-.rangeInput {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 22px;
-  background: transparent;
-  outline: none;
-  position: relative;
-  z-index: 2;
-  cursor: pointer;
-  margin: 0;
-  padding: 0;
-}
-
-/* 슬라이더 동그라미 (Thumb) */
-.rangeInput::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background-color: #ffffff;
-  border: 3px solid #4f46e5;
-  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.4);
-  cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease;
-}
-
-.rangeInput::-webkit-slider-thumb:hover {
-  transform: scale(1.12);
-}
-
-.rangeInput::-webkit-slider-thumb:active {
-  transform: scale(1.18);
-}
-
-.rangeInput::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background-color: #ffffff;
-  border: 3px solid #4f46e5;
-  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.4);
-  cursor: pointer;
-}
-
-/* 3단계 텍스트 라벨 (약함 / 보통 / 강함) */
-.labelsRow {
-  display: flex;
-  justify-content: space-between;
-  position: relative;
-}
-
-.labelBtn {
-  background: none;
-  border: none;
-  padding: 4px 6px;
-  font-size: 12px;
-  font-weight: 500;
+.cacheDescription {
+  font-size: 0.6875rem;
   color: #64748b;
-  cursor: pointer;
+}
+
+.cacheSummary {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-  user-select: none;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
-.labelBtn:first-child {
-  align-items: flex-start;
-  padding-left: 0;
-}
-
-.labelBtn:last-child {
-  align-items: flex-end;
-  padding-right: 0;
-}
-
-.labelBtn:hover {
-  color: #334155;
-}
-
-.labelBtn.selected {
-  color: #4f46e5;
-  font-weight: 700;
-}
-
-.scoreNotice {
-  font-size: 10px;
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-.labelBtn.selected .scoreNotice {
-  color: #6366f1;
-}
-
-/* 현재 강도 안내 멘트 */
-.descBox {
-  background-color: #ffffff;
-  border: 1px solid #f1f5f9;
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 11px;
-  line-height: 1.45;
+.warningHistoryToggle {
+  display: grid;
+  flex: 0 0 1.5rem;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #475569;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.descIcon {
-  font-size: 15px;
-  color: #6366f1;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.cacheCard {
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.warningHistoryToggle:hover {
+  color: #0f172a;
 }
 
 .clearCacheBtn {
-  border: 1px solid #fecaca;
-  background: #fff1f2;
-  color: #be123c;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12px;
+  border: 0.0625rem solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 0.5rem;
+  padding: 0.5625rem 0.75rem;
+  font: inherit;
+  font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .clearCacheBtn:hover {
-  background: #ffe4e6;
+  background: #f1f5f9;
 }
 
 .cacheStatus {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: #475569;
   line-height: 1.4;
+}
+
+.warningHistory {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.warningItem {
+  border: 0.0625rem solid #fecaca;
+  border-radius: 0.375rem;
+  padding: 0.375rem;
+  background: #fff7f7;
+}
+
+.warningSummary {
+  color: #991b1b;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.warningDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-top: 0.375rem;
+  color: #334155;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }

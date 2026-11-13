@@ -1,0 +1,1 @@
+export const DETECTION_THRESHOLD = 50;

@@ -4,13 +4,10 @@ import type { AnalyzePostsRequest, AnalyzePostsResponse } from "../utils/types";
 export default defineBackground(() => {
   // 확장 프로그램 설치/업데이트 시 초기 설정 및 컨텍스트 메뉴 등록
   chrome.runtime.onInstalled.addListener(() => {
-    chrome.storage.sync.get(["isEnabled", "detectionThreshold"], (result) => {
+    chrome.storage.sync.get(["isEnabled"], (result) => {
       const updates: Record<string, unknown> = {};
       if (result.isEnabled === undefined) {
         updates.isEnabled = true;
-      }
-      if (result.detectionThreshold === undefined) {
-        updates.detectionThreshold = 50;
       }
       if (Object.keys(updates).length > 0) {
         chrome.storage.sync.set(updates);

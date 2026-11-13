@@ -1,46 +1,17 @@
-import { createSignal, onMount, Show, createMemo } from "solid-js";
+import { createSignal, onMount, Switch, Match, For } from "solid-js";
+import { DETECTION_THRESHOLD } from "../../utils/constants";
+import type { ScannedPostItem } from "../../utils/types";
 import css from "./popup.module.css";
-
-interface FilterLevel {
-  step: number;
-  label: string;
-  threshold: number;
-  description: string;
-}
-
-const FILTER_LEVELS: FilterLevel[] = [
-  {
-    step: 0,
-    label: "약함",
-    threshold: 70,
-    description: "위험도 70점 이상 (명백한 선동·조작 게시글 차단)",
-  },
-  {
-    step: 1,
-    label: "보통",
-    threshold: 50,
-    description: "위험도 50점 이상 (왜곡·편향 및 선동 게시글 차단)",
-  },
-  {
-    step: 2,
-    label: "강함",
-    threshold: 40,
-    description: "위험도 40점 이상 (경미한 과장·의심 게시글까지 감지)",
-  },
-];
 
 export default () => {
   const [isEnabled, setIsEnabled] = createSignal<boolean>(true);
-  const [currentStep, setCurrentStep] = createSignal<number>(1); // 기본 보통(50)
   const [loading, setLoading] = createSignal<boolean>(true);
   const [currentPlatform, setCurrentPlatform] = createSignal("확인 중...");
   const [cacheStatus, setCacheStatus] = createSignal<string>("");
   const [cachedPostCount, setCachedPostCount] = createSignal(0);
-
-  const activeLevel = createMemo(() => {
-    const step = currentStep();
-    return FILTER_LEVELS[step] || FILTER_LEVELS[1];
-  });
+  const [warningPosts, setWarningPosts] = createSignal<ScannedPostItem[]>([]);
+  const [showWarningHistory, setShowWarningHistory] = createSignal(false);
+  const [warningHistoryArrow, setWarningHistoryArrow] = createSignal("◀");
 
   onMount(() => {
     if (typeof chrome !== "undefined" && chrome.tabs?.query) {
@@ -83,20 +54,10 @@ export default () => {
     }
 
     if (typeof chrome !== "undefined" && chrome.storage?.sync) {
-      chrome.storage.sync.get(["isEnabled", "detectionThreshold"], (res) => {
+      chrome.storage.sync.get(["isEnabled"], (res) => {
         if (typeof res.isEnabled === "boolean") {
           setIsEnabled(res.isEnabled);
         }
-
-        const th = typeof res.detectionThreshold === "number" ? res.detectionThreshold : 50;
-        if (th <= 40) {
-          setCurrentStep(2); // 강함
-        } else if (th <= 50) {
-          setCurrentStep(1); // 보통
-        } else {
-          setCurrentStep(0); // 약함
-        }
-
         setLoading(false);
       });
     } else {
@@ -110,7 +71,18 @@ export default () => {
           return;
         }
 
-        setCachedPostCount(Array.isArray(res.scannedPosts) ? res.scannedPosts.length : 0);
+        const scannedPosts: ScannedPostItem[] = Array.isArray(res.scannedPosts) ? res.scannedPosts : [];
+        setCachedPostCount(scannedPosts.length);
+        setWarningPosts(
+          scannedPosts
+            .filter(
+              (post) =>
+                post.status === "analyzed" &&
+                typeof post.analysisResult?.riskScore === "number" &&
+                post.analysisResult.riskScore >= DETECTION_THRESHOLD
+            )
+            .sort((a, b) => b.timestamp - a.timestamp)
+        );
       });
     }
   });
@@ -121,16 +93,6 @@ export default () => {
     setIsEnabled(next);
     if (typeof chrome !== "undefined" && chrome.storage?.sync) {
       chrome.storage.sync.set({ isEnabled: next });
-    }
-  };
-
-  // 필터링 강도 슬라이더 변경 핸들러
-  const handleStepChange = (step: number) => {
-    const clampedStep = Math.max(0, Math.min(2, step));
-    setCurrentStep(clampedStep);
-    const target = FILTER_LEVELS[clampedStep] || FILTER_LEVELS[1];
-    if (typeof chrome !== "undefined" && chrome.storage?.sync) {
-      chrome.storage.sync.set({ detectionThreshold: target?.threshold });
     }
   };
 
@@ -148,53 +110,40 @@ export default () => {
 
       setCacheStatus("캐시가 비워졌습니다.");
       setCachedPostCount(0);
+      setWarningPosts([]);
+      setShowWarningHistory(false);
+      setWarningHistoryArrow("◀");
     });
   };
 
+  const toggleWarningHistory = () => {
+    if (showWarningHistory()) {
+      setShowWarningHistory(false);
+      setWarningHistoryArrow("◀");
+    } else {
+      setShowWarningHistory(true);
+      setWarningHistoryArrow("▼");
+    }
+  };
+
   return (
-    <Show when={!loading()} fallback={<div class={css.popupBox}></div>}>
-      <div class={css.popupBox}>
-        {/* 헤더 */}
-        <header class={css.header}>
-          <div class={css.brand}>
-            <span class={`${css.materialIcon} ${css.brandIcon}`}>verified_user</span>
-            <span class={css.brandTitle}>Detectium</span>
-          </div>
-          <div
-            class={`${css.statusIndicator} ${
-              isEnabled() ? css.active : css.inactive
-            }`}
-          >
-            <span class={css.statusDot}></span>
-            <span>{isEnabled() ? "보호 중" : "꺼짐"}</span>
-          </div>
-        </header>
-
-        <section class={css.section}>
-          <div class={css.platformCard}>
-            <div class={css.platformIconWrap}>
-              <span class={`${css.materialIcon} ${css.platformIcon}`}>language</span>
-            </div>
-            <div class={css.platformInfo}>
-              <span class={css.platformLabel}>현재 접속 중인 플랫폼</span>
-              <span class={css.platformName}>{currentPlatform()}</span>
-            </div>
-          </div>
-        </section>
-
-        {/* 1. 활성화 / 비활성화 라운드 바 토글 스위치 */}
-        <section class={css.section}>
-          <div class={css.toggleCard}>
-            <div class={css.toggleInfo}>
-              <span class={css.toggleLabel}>실시간 게시글 필터링</span>
-              <span class={css.toggleSubLabel}>
-                {isEnabled() ? "SNS 피드를 실시간 감지합니다" : "감지 기능이 중지되었습니다"}
-              </span>
+    <Switch>
+      <Match when={loading()}>
+        <div class={css.popupBox}></div>
+      </Match>
+      <Match when={!loading()}>
+        <div class={css.popupBox}>
+          {/* 헤더 */}
+          <header class={css.header}>
+            <div class={css.brand}>
+              <span class={`mtrl-icon ${css.brandIcon}`}>verified_user</span>
+              <span class={css.brandTitle}>커트니</span>
             </div>
             <label class={css.switchContainer}>
               <input
                 type="checkbox"
                 class={css.switchInput}
+                aria-label="커트니 활성화"
                 checked={isEnabled()}
                 onChange={handleToggle}
               />
@@ -202,125 +151,100 @@ export default () => {
                 <span class={css.switchThumb}></span>
               </span>
             </label>
-          </div>
-        </section>
+          </header>
 
-        {/* 2. 필터링 강도 3단계 슬라이드 바 */}
-        <section class={css.section}>
-          <div class={css.strengthCard}>
-            <div class={css.sectionHeader}>
-              <div class={css.sectionTitleWrap}>
-                <span class={`${css.materialIcon} ${css.sectionIcon}`}>tune</span>
-                <span class={css.sectionTitle}>필터링 강도</span>
-              </div>
-              <span class={css.strengthValueBadge}>
-                {activeLevel()?.label} ({activeLevel()?.threshold}점↑)
-              </span>
+          <section class={css.platformSection}>
+            <div class={css.platformValue}>
+              <Switch>
+                <Match when={currentPlatform() === "Instagram"}>
+                  <svg class={css.platformLogo} viewBox="0 0 24 24" aria-label="Instagram 로고">
+                    <defs>
+                      <linearGradient id="instagram-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#feda75" />
+                        <stop offset="50%" stop-color="#d62976" />
+                        <stop offset="100%" stop-color="#4f5bd5" />
+                      </linearGradient>
+                    </defs>
+                    <rect
+                      x="3"
+                      y="3"
+                      width="18"
+                      height="18"
+                      rx="5"
+                      fill="none"
+                      stroke="url(#instagram-gradient)"
+                      stroke-width="2"
+                    />
+                    <circle cx="12" cy="12" r="4" fill="none" stroke="url(#instagram-gradient)" stroke-width="2" />
+                    <circle cx="17.5" cy="6.8" r="1.2" fill="#d62976" />
+                  </svg>
+                </Match>
+                <Match when={currentPlatform() === "X"}>
+                  <svg class={css.platformLogo} viewBox="-0.25 0 24.5 24.5" aria-label="X 로고">
+                    <path
+                      fill="currentColor"
+                      d="M18.901 1.153h3.68L14.54 10.281l9.598 13.066h-7.5l-5.879-7.693-6.731 7.693H.346l8.576-9.805L-.25 1.153h7.69l5.314 7.023zm-1.291 20.013h2.039L6.54 3.217H4.351z"
+                    />
+                  </svg>
+                </Match>
+                <Match when={currentPlatform() !== "Instagram" && currentPlatform() !== "X"}>
+                  <span class={`mtrl-icon ${css.platformFallbackIcon}`}>language</span>
+                </Match>
+              </Switch>
+              <span class={css.platformName}>{currentPlatform()}</span>
             </div>
+          </section>
 
-            <div class={css.sliderWrapper}>
-              {/* 가로 라인 배경 및 활성 진행 라인 */}
-              <div class={css.sliderTrackLine}>
-                <div
-                  class={css.sliderTrackFill}
-                  style={{ width: `${(currentStep() / 2) * 100}%` }}
-                ></div>
+          <section class={css.section}>
+            <div class={css.cacheSection}>
+              <div class={css.cacheSummary}>
+                <span class={css.cacheDescription}>{cachedPostCount()}개 게시글 캐시됨</span>
+                <Switch>
+                  <Match when={warningPosts().length > 0}>
+                    <button
+                      type="button"
+                      class={css.warningHistoryToggle}
+                      aria-label={showWarningHistory() ? "경고 내역 접기" : "경고 내역 보기"}
+                      aria-expanded={showWarningHistory()}
+                      title={showWarningHistory() ? "경고 내역 접기" : "경고 내역 보기"}
+                      onClick={toggleWarningHistory}
+                    >
+                      {warningHistoryArrow()}
+                    </button>
+                  </Match>
+                </Switch>
               </div>
-
-              {/* 3단계 스텝 눈금 도트 */}
-              <div class={css.sliderStepDots}>
-                <span
-                  class={`${css.stepDot} ${
-                    currentStep() >= 0 ? css.active : ""
-                  }`}
-                ></span>
-                <span
-                  class={`${css.stepDot} ${
-                    currentStep() >= 1 ? css.active : ""
-                  }`}
-                ></span>
-                <span
-                  class={`${css.stepDot} ${
-                    currentStep() >= 2 ? css.active : ""
-                  }`}
-                ></span>
-              </div>
-
-              {/* 동그라미(Thumb)가 움직이는 3단계 슬라이더 Range Input */}
-              <input
-                type="range"
-                min="0"
-                max="2"
-                step="1"
-                value={currentStep()}
-                class={css.rangeInput}
-                onInput={(e) => handleStepChange(Number(e.currentTarget.value))}
-              />
-
-              {/* 하단 3단계 텍스트 (약함 / 보통 / 강함) */}
-              <div class={css.labelsRow}>
-                <button
-                  type="button"
-                  class={`${css.labelBtn} ${
-                    currentStep() === 0 ? css.selected : ""
-                  }`}
-                  onClick={() => handleStepChange(0)}
-                >
-                  <span>약함</span>
-                  <span class={css.scoreNotice}>70점 이상</span>
-                </button>
-                <button
-                  type="button"
-                  class={`${css.labelBtn} ${
-                    currentStep() === 1 ? css.selected : ""
-                  }`}
-                  onClick={() => handleStepChange(1)}
-                >
-                  <span>보통</span>
-                  <span class={css.scoreNotice}>50점 이상</span>
-                </button>
-                <button
-                  type="button"
-                  class={`${css.labelBtn} ${
-                    currentStep() === 2 ? css.selected : ""
-                  }`}
-                  onClick={() => handleStepChange(2)}
-                >
-                  <span>강함</span>
-                  <span class={css.scoreNotice}>40점 이상</span>
-                </button>
-              </div>
+              <Switch>
+                <Match when={showWarningHistory()}>
+                  <div class={css.warningHistory}>
+                    <For each={warningPosts()}>
+                      {(post) => (
+                        <details class={css.warningItem}>
+                          <summary class={css.warningSummary}>
+                            {post.platform} · 위험도 {post.analysisResult?.riskScore}점
+                          </summary>
+                          <div class={css.warningDetails}>
+                            <p>{post.content}</p>
+                            <p>{post.analysisResult?.description}</p>
+                          </div>
+                        </details>
+                      )}
+                    </For>
+                  </div>
+                </Match>
+              </Switch>
+              <button type="button" class={css.clearCacheBtn} onClick={handleClearCache}>
+                캐시 비우기
+              </button>
+              <Switch>
+                <Match when={Boolean(cacheStatus())}>
+                  <span class={css.cacheStatus}>{cacheStatus()}</span>
+                </Match>
+              </Switch>
             </div>
-
-            {/* 현재 강도 설명 */}
-            <div class={css.descBox}>
-              <span class={`${css.materialIcon} ${css.descIcon}`}>info</span>
-              <span>{activeLevel()?.description}</span>
-            </div>
-          </div>
-        </section>
-
-        <section class={css.section}>
-          <div class={css.cacheCard}>
-            <div class={css.sectionHeader}>
-              <div class={css.sectionTitleWrap}>
-                <span class={`${css.materialIcon} ${css.sectionIcon}`}>delete</span>
-                <span class={css.sectionTitle}>캐시 관리</span>
-              </div>
-            </div>
-
-            <button type="button" class={css.clearCacheBtn} onClick={handleClearCache}>
-              게시글 캐시 비우기
-            </button>
-
-            <span class={css.cacheStatus}>현재 {cachedPostCount()}개 게시글 캐시됨</span>
-
-            <Show when={cacheStatus()}>
-              <span class={css.cacheStatus}>{cacheStatus()}</span>
-            </Show>
-          </div>
-        </section>
-      </div>
-    </Show>
+          </section>
+        </div>
+      </Match>
+    </Switch>
   );
 };

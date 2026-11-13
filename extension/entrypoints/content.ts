@@ -4,6 +4,7 @@ import {
   removeWarningBanner,
   updateAnalysisStatus,
 } from "../utils/dom-renderer";
+import { DETECTION_THRESHOLD } from "../utils/constants";
 import type {
   AnalysisResult,
   AnalyzePostsRequest,
@@ -26,10 +27,8 @@ export default defineContentScript({
     contentGlobal[initializedKey] = true;
 
     const BACKGROUND_TIMEOUT_MS = 90_000;
-    const DEFAULT_DETECTION_THRESHOLD = 50;
 
     let isExtensionActive = true;
-    let detectionThreshold = DEFAULT_DETECTION_THRESHOLD;
 
     // 진행 중인 분석 요청 관리
     const pendingElementsMap = new Map<string, HTMLElement>();
@@ -51,23 +50,13 @@ export default defineContentScript({
       element.dataset.detectiumPostKey = postKey;
       element.dataset.detectiumStatus = "done";
 
-      if (typeof result.riskScore === "number" && result.riskScore >= detectionThreshold) {
-        updateAnalysisStatus(element, "failed");
+      if (typeof result.riskScore === "number" && result.riskScore >= DETECTION_THRESHOLD) {
+        updateAnalysisStatus(element, "flagged");
         showWarningBanner(element, result, postKey);
       } else {
         updateAnalysisStatus(element, "passed");
         removeWarningBanner(element);
       }
-    };
-
-    const refreshAnalyzedPostDisplays = () => {
-      document.querySelectorAll<HTMLElement>("[data-detectium-post-key]").forEach((element) => {
-        const postKey = element.dataset.detectiumPostKey;
-        const result = postKey ? analysisResultsByPostId.get(postKey) : undefined;
-        if (postKey && result) {
-          renderAnalysisResult(element, result, postKey);
-        }
-      });
     };
 
     const storedScannedPostsReady = new Promise<void>((resolve) => {
@@ -97,13 +86,9 @@ export default defineContentScript({
 
     // 스토리지 설정 동기화
     const syncSettings = () => {
-      chrome.storage.sync.get(["isEnabled", "detectionThreshold"], (result) => {
+      chrome.storage.sync.get(["isEnabled"], (result) => {
         if (typeof result.isEnabled === "boolean") {
           isExtensionActive = result.isEnabled;
-        }
-        if (typeof result.detectionThreshold === "number") {
-          detectionThreshold = result.detectionThreshold;
-          refreshAnalyzedPostDisplays();
         }
       });
     };
@@ -114,10 +99,6 @@ export default defineContentScript({
       if (area === "sync") {
         if (changes.isEnabled && typeof changes.isEnabled.newValue === "boolean") {
           isExtensionActive = changes.isEnabled.newValue;
-        }
-        if (changes.detectionThreshold && typeof changes.detectionThreshold.newValue === "number") {
-          detectionThreshold = changes.detectionThreshold.newValue;
-          refreshAnalyzedPostDisplays();
         }
       }
     });

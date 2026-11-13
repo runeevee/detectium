@@ -11,7 +11,7 @@ function escapeHtml(str: string): string {
 
 export function updateAnalysisStatus(
   targetElement: HTMLElement,
-  status: "loading" | "passed" | "failed" | null
+  status: "loading" | "passed" | "failed" | "flagged" | null
 ) {
   const existingHost = Array.from(targetElement.children).find((child) =>
     child.classList.contains("detectium-status-host")
@@ -33,7 +33,14 @@ export function updateAnalysisStatus(
   const host = document.createElement("div");
   host.className = "detectium-status-host";
   host.setAttribute("data-status", status);
-  const label = status === "loading" ? "검사 중" : status === "passed" ? "검사 통과" : "검사 실패";
+  const label =
+    status === "loading"
+      ? "검사 중"
+      : status === "passed"
+        ? "검사 통과"
+        : status === "flagged"
+          ? "필터링 대상"
+          : "검사 실패";
   host.setAttribute("aria-label", label);
   host.setAttribute("role", "img");
   const targetStyle = window.getComputedStyle(targetElement);
@@ -76,6 +83,9 @@ export function updateAnalysisStatus(
         border-color: #18ff6d;
       }
       :host([data-status="failed"]) {
+        border-color: #18ff6d;
+      }
+      :host([data-status="flagged"]) {
         border-color: #ff1859;
       }
       @keyframes detectium-loading-pulse {
@@ -97,6 +107,7 @@ export function injectWarningBanner(
   if (targetElement.querySelector(".detectium-overlay-host")) {
     return;
   }
+  targetElement.querySelector(".detectium-warning-review-host")?.remove();
 
   // 게시글 컨테이너가 position: static이면 relative로 변경
   const currentPosition = window.getComputedStyle(targetElement).position;
@@ -177,13 +188,76 @@ export function injectWarningBanner(
       <div class="analysis-preview">
         <div>${escapeHtml(description)}</div>
       </div>
-      <button class="show-anyway-btn">해당 사실을 인지하고 있으며, 계속 보겠습니다.</button>
+      <button type="button" class="show-anyway-btn">해당 사실을 인지하고 있으며, 계속 보겠습니다.</button>
     </div>
   `;
 
+  host.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
   shadow.querySelector(".show-anyway-btn")?.addEventListener("click", () => {
     host.remove();
+    injectWarningReviewButton(targetElement, result, onDismiss);
     onDismiss?.();
+  });
+
+  targetElement.appendChild(host);
+}
+
+function injectWarningReviewButton(
+  targetElement: HTMLElement,
+  result: AnalysisResult,
+  onDismiss?: () => void
+) {
+  targetElement.querySelector(".detectium-warning-review-host")?.remove();
+
+  const host = document.createElement("div");
+  host.className = "detectium-warning-review-host";
+  host.style.cssText = `
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    z-index: 2;
+    pointer-events: auto;
+    transform: translateY(-1.5rem);
+  `;
+
+  const shadow = host.attachShadow({ mode: "open" });
+  shadow.innerHTML = `
+    <style>
+      :host {
+        all: initial;
+        display: block;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      button {
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border: 1px solid #b91c1c;
+        border-radius: 50%;
+        padding: 0;
+        background: transparent;
+        color: #b91c1c;
+        font-family: inherit;
+        font-size: 22px;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+      }
+    </style>
+    <button type="button" aria-label="경고 다시 보기" title="경고 다시 보기">!</button>
+  `;
+
+  shadow.querySelector("button")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    host.remove();
+    injectWarningBanner(targetElement, result, onDismiss);
   });
 
   targetElement.appendChild(host);
@@ -191,4 +265,5 @@ export function injectWarningBanner(
 
 export function removeWarningBanner(targetElement: HTMLElement) {
   targetElement.querySelector(".detectium-overlay-host")?.remove();
+  targetElement.querySelector(".detectium-warning-review-host")?.remove();
 }

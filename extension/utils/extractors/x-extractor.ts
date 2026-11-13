@@ -42,6 +42,10 @@ export function extractXImageUrls(article: HTMLElement): string[] {
 
 const expandedXPosts = new WeakSet<HTMLElement>();
 
+function getXStatusId(url: string): string | undefined {
+  return url.match(/\/status\/(\d+)/)?.[1];
+}
+
 /**
  * Expand a truncated X post before extracting its text.
  */
@@ -94,9 +98,9 @@ export function extractXPost(article: HTMLElement): ExtractedPost | null {
   let tweetId = "";
   const statusLink = article.querySelector<HTMLAnchorElement>("a[href*=\"/status/\"]");
   if (statusLink) {
-    const match = statusLink.href.match(/\/status\/(\d+)/);
-    if (match) {
-      tweetId = `x-${match[1]}`;
+    const statusId = getXStatusId(statusLink.href);
+    if (statusId) {
+      tweetId = `x-${statusId}`;
     }
   }
 
@@ -128,7 +132,16 @@ export class XExtractor extends BasePostExtractor {
   }
 
   getCandidateElements(): HTMLElement[] {
-    return Array.from(document.querySelectorAll<HTMLElement>("article[data-testid=\"tweet\"]"));
+    const tweets = Array.from(document.querySelectorAll<HTMLElement>("article[data-testid=\"tweet\"]"));
+    const detailStatusId = getXStatusId(window.location.pathname);
+    if (!detailStatusId) {
+      return tweets;
+    }
+
+    return tweets.filter((tweet) => {
+      const statusLink = tweet.querySelector<HTMLAnchorElement>("a[href*=\"/status/\"]");
+      return statusLink !== null && getXStatusId(statusLink.href) === detailStatusId;
+    });
   }
 
   getImageUrls(article: HTMLElement): string[] {
