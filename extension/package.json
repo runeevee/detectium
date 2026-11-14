@@ -14,7 +14,7 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
-    "openai": "^7.53.0",
+    "@anthropic-ai/sdk": "^1.8.0",
     "solid-js": "^1.9.5",
     "solid-transition-group": "^0.3.0",
     "zod": "^4.6.7"

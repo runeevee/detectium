@@ -13,7 +13,7 @@ dotenv.config({
   override: true,
 });
 
-const apiKey = process.env.OPENAI_API_KEY?.trim() || "";
+const apiKey = process.env.ANTHROPIC_API_KEY?.trim() || "";
 
 export default defineConfig({
   modules: ["@wxt-dev/module-solid"],
@@ -37,7 +37,7 @@ export default defineConfig({
     host_permissions: [
       "http://localhost:*/*",
       "http://127.0.0.1:*/*",
-      "https://api.openai.com/*",
+      "https://api.anthropic.com/*",
       "*://*.cdninstagram.com/*",
       "*://*.fbcdn.net/*",
       "*://*.twimg.com/*",
@@ -51,7 +51,7 @@ export default defineConfig({
 
   vite: () => ({
     define: {
-      "process.env.OPENAI_API_KEY": JSON.stringify(apiKey),
+      "process.env.ANTHROPIC_API_KEY": JSON.stringify(apiKey),
     },
 
     resolve: {

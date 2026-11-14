@@ -1,4 +1,4 @@
-import { analyzePostsWithOpenAI } from "../utils/openai-service";
+import { analyzePostsWithClaude } from "../utils/claude-service";
 import type { AnalyzePostsRequest, AnalyzePostsResponse } from "../utils/types";
 
 export default defineBackground(() => {
@@ -62,7 +62,7 @@ export default defineBackground(() => {
         }
 
         try {
-          const results = await analyzePostsWithOpenAI(req.posts);
+          const results = await analyzePostsWithClaude(req.posts);
           sendResponse({ success: true, results } as AnalyzePostsResponse);
         } catch (err: any) {
           console.error("[Detectium] LLM 분석 실패:", err);

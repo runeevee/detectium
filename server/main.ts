@@ -2,8 +2,8 @@ import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
+import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 
 const app = new Hono();
@@ -11,14 +11,16 @@ const app = new Hono();
 // CORS 활성화 (브라우저 익스텐션에서 REST API 호출 가능하도록)
 app.use("*", cors());
 
-const apiKey = process.env.OPENAI_API_KEY?.trim();
+const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
 if (!apiKey) {
-  console.warn("[Detectium Server] 경고: OPENAI_API_KEY가 .env에 설정되지 않았습니다.");
+  console.warn("[Detectium Server] 경고: ANTHROPIC_API_KEY가 .env에 설정되지 않았습니다.");
 }
 
-const client = new OpenAI({
+const client = new Anthropic({
   apiKey: apiKey || "",
 });
+
+const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-haiku-5-5";
 
 // Zod 버전에 따른 정수 스키마 호환 처리
 const intSchema =
@@ -76,6 +78,34 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
     console.warn("[Detectium Server] 이미지 변환 실패:", url, err);
     return null;
   }
+}
+
+// Data URL을 Claude API image block source 형식으로 분해하는 헬퍼 함수
+function parseDataUrl(dataUrl: string): {
+  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+  data: string;
+} | null {
+  if (!dataUrl) return null;
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/s);
+  if (match) {
+    const rawType = match[1].toLowerCase();
+    let mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" = "image/jpeg";
+    if (rawType === "image/png") mediaType = "image/png";
+    else if (rawType === "image/gif") mediaType = "image/gif";
+    else if (rawType === "image/webp") mediaType = "image/webp";
+    else if (rawType === "image/jpeg" || rawType === "image/jpg") mediaType = "image/jpeg";
+    return {
+      mediaType,
+      data: match[2].trim(),
+    };
+  }
+  if (/^[A-Za-z0-9+/=]+$/.test(dataUrl.trim())) {
+    return {
+      mediaType: "image/jpeg",
+      data: dataUrl.trim(),
+    };
+  }
+  return null;
 }
 
 // 헬스체크
@@ -191,87 +221,119 @@ riskScore는 0부터 100 사이의 정수이며, 거짓/왜곡성이 강할수�
 
 5. [기준]을 바탕으로 riskScore를 책정하세요.
 6. links에는 게시글을 검증하고 팩트체크하는 과정에서 web_search 등을 통해 확인하거나 참고한 신뢰할 수 있는 출처 웹페이지의 실제 URL(링크)들을 문자열 배열로 기록하십시오.
-- 각 항목은 유효한 전체 URL(예: https://...) 형식이어야 합니다. **단, 뒤에 utm_source=openai가 있는 URL(예: https://...utm_source=openai)은 제외합니다.**
+- 각 항목은 유효한 전체 URL(예: https://...) 형식이어야 합니다.
 - 위반 사항이 없거나 검색/참고한 웹 링크가 없는 경우에는 빈 배열([])로 반환하세요.
 - 허위 URL이나 임의로 꾸며낸 링크를 작성하지 마세요.
 7. 입력된 모든 게시글에 대해 빠짐없이 results에 하나씩 결과를 반환하세요. id는 입력된 게시글 ID를 그대로 사용하세요.
 `.trim();
 
-    const userContent: OpenAI.Responses.ResponseInputContent[] = [];
+    const userContent: Array<
+      | { type: "text"; text: string }
+      | {
+          type: "image";
+          source: {
+            type: "base64";
+            media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+            data: string;
+          };
+        }
+    > = [];
 
     userContent.push({
-      type: "input_text",
+      type: "text",
       text: `다음 ${postsWithImages.length}개의 SNS 게시글 목록을 분석해주세요.\n각 게시글의 캡션과 첨부 이미지만 검토하여 허위사실/통계왜곡 여부를 팩트체크해주세요.`,
     });
 
     postsWithImages.forEach((p) => {
       userContent.push({
-        type: "input_text",
+        type: "text",
         text: `\n----------------------------------------\n[결과 연결용 ID: ${p.id} — 이 ID를 description에 쓰지 말 것]\n- 캡션: ${p.content || "(캡션 없음)"}\n- 첨부 이미지 수: ${p.analysisImages.length}개\n`,
       });
 
       p.analysisImages.forEach((image) => {
         userContent.push({
-          type: "input_text",
+          type: "text",
           text: `▲ [게시글 ID: ${p.id}]의 ${image.label}:`,
         });
-        userContent.push({
-          type: "input_image",
-          image_url: image.dataUrl,
-          detail: "high",
-        });
+
+        const parsedImg = parseDataUrl(image.dataUrl);
+        if (parsedImg) {
+          userContent.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: parsedImg.mediaType,
+              data: parsedImg.data,
+            },
+          });
+        }
       });
     });
 
-    const response = await client.responses.create({
-      model: "gpt-4o-mini",
-      instructions,
-      input: [{ role: "user", content: userContent }],
-      text: {
-        format: zodTextFormat(AnalysisSchema, "fact_check_results"),
+    const response = await client.messages.parse({
+      model,
+      max_tokens: 4096,
+      system: instructions,
+      messages: [{ role: "user", content: userContent }],
+      tools: [
+        {
+          type: "web_search_20250305",
+          name: "web_search",
+        },
+      ],
+      output_config: {
+        format: zodOutputFormat(AnalysisSchema),
       },
-      temperature: 0.1,
-      tools: [{ type: "web_search" }],
-      tool_choice: "required",
     });
 
-    if (response.status !== "completed") {
-      const reason = response.incomplete_details?.reason;
-      throw new Error(
-        `OpenAI 분석 응답이 완료되지 않았습니다.${reason ? ` 중단 사유: ${reason}` : ""}`
-      );
+    let parsed = response.parsed_output;
+    if (!parsed) {
+      // Fallback: Check text content blocks for JSON
+      const fullText = response.content
+        .filter((block): block is Anthropic.TextBlock => block.type === "text")
+        .map((block) => block.text)
+        .join("");
+
+      if (!fullText) {
+        throw new Error("Claude가 최종 분석 결과를 반환하지 않았습니다.");
+      }
+
+      const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error("Claude의 최종 분석 결과가 유효한 JSON 형식이 아닙니다.");
+      }
+
+      try {
+        const rawJson = JSON.parse(jsonMatch[0]);
+        parsed = AnalysisSchema.parse(rawJson);
+      } catch (err: any) {
+        throw new Error(`Claude 최종 분석 결과 JSON 검증 실패: ${err?.message || err}`);
+      }
     }
 
-    const finalMessage =
-      [...response.output].reverse().find(
-        (item) => item.type === "message" && item.phase === "final_answer"
-      ) ??
-      [...response.output].reverse().find(
-        (item) => item.type === "message" && item.phase !== "commentary"
-      );
-
-    const finalText =
-      finalMessage?.type === "message"
-        ? finalMessage.content
-            .filter((content) => content.type === "output_text")
-            .map((content) => content.text)
-            .join("")
-        : "";
-
-    if (!finalText) {
-      throw new Error("OpenAI가 최종 분석 결과를 반환하지 않았습니다.");
+    const citationUrls: string[] = [];
+    for (const block of response.content as any[]) {
+      if (block.type === "text" && Array.isArray(block.citations)) {
+        for (const citation of block.citations) {
+          if (citation.url && typeof citation.url === "string") {
+            citationUrls.push(citation.url);
+          }
+        }
+      }
+      if (block.type === "web_search_tool_result" && Array.isArray(block.results)) {
+        for (const item of block.results) {
+          if (item.url && typeof item.url === "string") {
+            citationUrls.push(item.url);
+          }
+        }
+      }
     }
 
-    let output: unknown;
-    try {
-      output = JSON.parse(finalText);
-    } catch {
-      throw new Error("OpenAI의 최종 분석 결과가 유효한 JSON 형식이 아닙니다.");
-    }
-
-    const parsed = AnalysisSchema.parse(output);
     const enrichedResults = parsed.results.map((res) => {
       const links = new Set(res.links || []);
+      citationUrls.forEach((u) => {
+        if (u.startsWith("http")) links.add(u);
+      });
       const descUrls = res.description?.match(/https?:\/\/[^\s)\],]+/g) || [];
       const pointUrls =
         res.analysisContent?.violatedPoints?.flatMap(
