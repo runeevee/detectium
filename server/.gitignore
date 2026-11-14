@@ -1,0 +1,17 @@
+# WXT & Build artifacts
+.output
+.wxt
+
+# Dependencies
+node_modules
+
+# Environment & Logs
+.env*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db

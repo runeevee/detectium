@@ -13,7 +13,10 @@ dotenv.config({
   override: true,
 });
 
-const apiKey = process.env.OPENAI_API_KEY?.trim() || "";
+const apiKey = process.env.OPENAI_API_KEY?.trim();
+if (!apiKey) {
+  throw new Error(`OPENAI_API_KEY가 ${envPath}에 설정되어 있지 않습니다.`);
+}
 
 export default defineConfig({
   modules: ["@wxt-dev/module-solid"],

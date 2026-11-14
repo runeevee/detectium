@@ -1,0 +1,10 @@
+{
+  "type": "module",
+  "scripts": {
+    "dev": "tsx ./main.ts"
+  },
+  "dependencies": {
+    "hono": "^4.13.18",
+    "tsx": "^4.23.15"
+  }
+}
