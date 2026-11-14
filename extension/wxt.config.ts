@@ -47,6 +47,12 @@ export default defineConfig({
       "*://*.twitter.com/*",
       "<all_urls>",
     ],
+    web_accessible_resources: [
+      {
+        resources: ["assets/content.woff2"],
+        matches: ["<all_urls>"],
+      },
+    ],
   },
 
   vite: () => ({

@@ -103,11 +103,6 @@ function parseDataUrl(dataUrl: string): {
   return null;
 }
 
-// 헬스체크
-app.get("/", (c) => {
-  return c.json({ status: "ok", message: "Detectium Analysis Server is running" });
-});
-
 // 분석 API: /api/analyze
 app.post("/api/analyze", async (c) => {
   try {

@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "./types";
+import materialIconsFontUrl from "@font/mtrl-outlined-fill-grad-opsz-wght.woff2?url&no-inline";
 
 function escapeHtml(str: string): string {
   return str
@@ -423,12 +424,18 @@ function injectWarningReviewButton(
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `
     <style>
+      @font-face {
+        font-family: "Material Icons";
+        src: url("${chrome.runtime.getURL(materialIconsFontUrl.replace(/^\/+/, ""))}") format("woff2");
+        font-weight: 300;
+        font-style: normal;
+      }
       :host {
         all: initial;
         display: block;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       }
-      button {
+      .warning-review-button {
         box-sizing: border-box;
         display: grid;
         place-items: center;
@@ -445,11 +452,27 @@ function injectWarningReviewButton(
         line-height: 1;
         cursor: pointer;
       }
+      .mtrl-icon {
+        font-family: "Material Icons";
+        font-weight: 300;
+        font-style: normal;
+        font-size: 22px;
+        line-height: 1;
+        letter-spacing: normal;
+        text-transform: none;
+        white-space: nowrap;
+        word-wrap: normal;
+        direction: ltr;
+        font-feature-settings: "liga";
+        -webkit-font-smoothing: antialiased;
+      }
     </style>
-    <button type="button" aria-label="경고 다시 보기" title="경고 다시 보기">!</button>
+    <button class="warning-review-button" type="button" aria-label="경고 다시 보기" title="경고 다시 보기">
+      <span class="mtrl-icon" aria-hidden="true">info</span>
+    </button>
   `;
 
-  shadow.querySelector("button")?.addEventListener("click", (event) => {
+  shadow.querySelector(".warning-review-button")?.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
     host.remove();
