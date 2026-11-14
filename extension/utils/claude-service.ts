@@ -136,5 +136,3 @@ export async function analyzePostsWithClaude(
   return data.results as AnalysisResult[];
 }
 
-// 하위 호환성을 위한 alias
-export const analyzePostsWithOpenAI = analyzePostsWithClaude;
