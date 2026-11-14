@@ -70,30 +70,12 @@ const AnalysisSchema = z.object({
 });
 
 export async function analyzePostsWithOpenAI(
-  posts: PostData[],
-  apiKey?: string
+  posts: PostData[]
 ): Promise<AnalysisResult[]> {
-// 전달받은 API 키를 우선 사용
-const passedKey = typeof apiKey === "string" ? apiKey.trim() : "";
-
-// WXT 설정에서 주입된 환경변수 사용
-const envKey = process.env.OPENAI_API_KEY?.trim() || "";
-
-// 최종 API 키 결정
-const effectiveKey = passedKey || envKey;
-
-// API 키 자체는 절대 출력하지 않고 존재 여부만 확인
-console.log("[Detectium] API 키 확인:", {
-  passedKey: Boolean(passedKey),
-  envKey: Boolean(envKey),
-  effectiveKey: Boolean(effectiveKey),
-});
-
-if (!effectiveKey) {
-  throw new Error(
-    "OpenAI API 키가 전달되지 않았습니다. 환경변수와 확장 프로그램 설정을 확인해주세요."
-  );
-}
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("extension/.env에서 OPENAI_API_KEY를 불러오지 못했습니다.");
+  }
 
   if (!posts || posts.length === 0) {
     return [];
@@ -110,7 +92,7 @@ if (!effectiveKey) {
   }
 
   const client = new OpenAI({
-    apiKey: effectiveKey,
+    apiKey,
     dangerouslyAllowBrowser: true,
   });
 

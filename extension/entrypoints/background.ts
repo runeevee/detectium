@@ -44,7 +44,7 @@ export default defineBackground(() => {
     if (message.type === "ANALYZE_POSTS_REQUEST") {
       const req = message as AnalyzePostsRequest;
 
-      chrome.storage.sync.get(["isEnabled", "apiKey"], async (storage) => {
+      chrome.storage.sync.get(["isEnabled"], async (storage) => {
         if (chrome.runtime.lastError) {
           const error = chrome.runtime.lastError.message || "확장 설정을 읽지 못했습니다.";
           console.error("[Detectium] 설정 조회 실패:", error);
@@ -61,9 +61,8 @@ export default defineBackground(() => {
           return;
         }
 
-        const apiKey = typeof storage.apiKey === "string" ? storage.apiKey : undefined;
         try {
-          const results = await analyzePostsWithOpenAI(req.posts, apiKey);
+          const results = await analyzePostsWithOpenAI(req.posts);
           sendResponse({ success: true, results } as AnalyzePostsResponse);
         } catch (err: any) {
           console.error("[Detectium] LLM 분석 실패:", err);

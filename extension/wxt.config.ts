@@ -8,17 +8,12 @@ import dotenv from "dotenv";
 const envPath = path.resolve(import.meta.dirname, ".env");
 
 // 환경변수 불러오기
-const envResult = dotenv.config({
+dotenv.config({
   path: envPath,
+  override: true,
 });
 
-// API 키 가져오기
 const apiKey = process.env.OPENAI_API_KEY?.trim() || "";
-
-// API 키 값 자체는 출력하지 않고 설정 여부만 확인
-console.log("[Detectium] .env 경로:", envPath);
-console.log("[Detectium] .env 로드 상태:", !envResult.error);
-console.log("[Detectium] API 키 설정 여부:", Boolean(apiKey));
 
 export default defineConfig({
   modules: ["@wxt-dev/module-solid"],
@@ -54,8 +49,6 @@ export default defineConfig({
 
   vite: () => ({
     define: {
-      // 기존 코드에서 process.env.OPENAI_API_KEY를
-      // 사용하는 부분에 환경변수 값을 전달
       "process.env.OPENAI_API_KEY": JSON.stringify(apiKey),
     },
 
