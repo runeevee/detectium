@@ -7,11 +7,10 @@ export interface PostData {
 
 export interface AnalysisResult {
   id: string;
-  riskScore: number; // 0 ~ 100
+  isCredible: boolean;
   description: string;
   analysisContent: {
     violatedPoints: string[];
-    nonViolatedPoints: string[];
   };
   extractedImageText?: string;
   links?: string[];

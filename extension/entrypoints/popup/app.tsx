@@ -1,5 +1,4 @@
 import { createSignal, onMount, Switch, Match, For, Show } from "solid-js";
-import { DETECTION_THRESHOLD } from "../../utils/constants";
 import type { ScannedPostItem } from "../../utils/types";
 import css from "./popup.module.css";
 
@@ -86,8 +85,7 @@ export default () => {
             .filter(
               (post) =>
                 post.status === "analyzed" &&
-                typeof post.analysisResult?.riskScore === "number" &&
-                post.analysisResult.riskScore >= DETECTION_THRESHOLD
+                post.analysisResult?.isCredible === false
             )
             .sort((a, b) => b.timestamp - a.timestamp)
         );
@@ -241,7 +239,7 @@ export default () => {
                         return (
                           <details class={css.warningItem}>
                             <summary class={css.warningSummary}>
-                              {post.platform} · 위험도 {post.analysisResult?.riskScore}점
+                              {post.platform} · 신뢰성 의심
                             </summary>
                             <div class={css.warningDetails}>
                               <p>{post.content}</p>

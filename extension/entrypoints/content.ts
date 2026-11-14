@@ -4,7 +4,6 @@ import {
   removeWarningBanner,
   updateAnalysisStatus,
 } from "../utils/dom-renderer";
-import { DETECTION_THRESHOLD } from "../utils/constants";
 import type {
   AnalysisResult,
   AnalyzePostsRequest,
@@ -50,7 +49,7 @@ export default defineContentScript({
       element.dataset.detectiumPostKey = postKey;
       element.dataset.detectiumStatus = "done";
 
-      if (typeof result.riskScore === "number" && result.riskScore >= DETECTION_THRESHOLD) {
+      if (result.isCredible === false) {
         updateAnalysisStatus(element, "flagged");
         showWarningBanner(element, result, postKey);
       } else {

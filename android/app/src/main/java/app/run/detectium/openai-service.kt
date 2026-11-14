@@ -128,9 +128,8 @@ internal class OpenAiService(private val apiKey: String) {
         "properties",
         JSONObject()
           .put("violatedPoints", stringArraySchema())
-          .put("nonViolatedPoints", stringArraySchema())
       )
-      .put("required", JSONArray().put("violatedPoints").put("nonViolatedPoints"))
+      .put("required", JSONArray().put("violatedPoints"))
       .put("additionalProperties", false)
 
     val result = JSONObject()
@@ -250,7 +249,6 @@ internal class OpenAiService(private val apiKey: String) {
 
       3. analysisContent에는 기준별 분석 내용을 나누어 기록하세요.
       - violatedPoints에는 게시글에서 실제로 위반한 기준과 근거를 기록하세요. 위반한 기준이 없으면 빈 배열로 반환하세요.
-      - nonViolatedPoints에는 검토했으나 위반하지 않은 기준을 기록하세요. 판단할 자료가 없어 검토할 수 없는 기준은 위반하지 않았다고 단정하지 말고 기록하지 마세요.
       - 각 항목은 해당 기준을 어떻게 적용했는지 알 수 있도록 구체적으로 작성하세요.
       - 게시글에 사실 여부를 확인해야 할 주장, 통계, 인용, 사건 정보가 하나라도 있으면 web_search를 반드시 사용해 확인하세요. 확신이 들거나 학습 데이터로 알고 있는 내용이라도 검색을 생략하지 마세요.
       - 주장의 핵심 문구와 날짜·장소·수치 등 구체 정보를 검색어에 포함하고, 검색 결과가 주장을 직접 뒷받침하는지 확인하세요. 논쟁적이거나 현재 상황에 따라 달라지는 주장은 서로 독립적인 신뢰할 만한 출처를 추가로 검색해 교차 확인하세요.
