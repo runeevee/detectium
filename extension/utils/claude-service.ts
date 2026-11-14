@@ -90,7 +90,7 @@ export async function analyzePostsWithClaude(
           targets.map(async (url, index) => {
             const base64 = await fetchImageAsBase64(url);
             return {
-              label: `이미지 #${index + 1}`,
+              label: `${index + 1}번째 이미지`,
               dataUrl: base64 || url,
             };
           })
@@ -136,5 +136,3 @@ export async function analyzePostsWithClaude(
   return data.results as AnalysisResult[];
 }
 
-// 하위 호환성을 위한 alias
-export const analyzePostsWithOpenAI = analyzePostsWithClaude;
