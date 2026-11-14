@@ -1,1 +1,1 @@
-export const DETECTION_THRESHOLD = 50;
+export const DETECTION_THRESHOLD = 70;
