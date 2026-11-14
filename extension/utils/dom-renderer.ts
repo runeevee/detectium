@@ -166,13 +166,13 @@ export function injectWarningBanner(
           <div class="analysis-links-list">
             ${links
               .map((link) => {
-                let title = link;
+                let title = "";
                 try {
                   title = new URL(link).hostname;
                 } catch {
-                  // Keep the URL as the title when it cannot be parsed.
+                  // Do not expose malformed source URLs as display text.
                 }
-                return `<div class="source-link-row"><span class="source-link-title">${escapeHtml(title)}</span><a class="source-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link)}"><span class="source-link-icon" aria-hidden="true">↗</span><span class="source-link-url">${escapeHtml(link)}</span></a></div>`;
+                return `<div class="source-link-row"><a class="source-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer"><span class="source-link-icon" aria-hidden="true">↗</span><span class="source-link-domain">${escapeHtml(title)}</span></a></div>`;
               })
               .join("")}
           </div>
@@ -237,6 +237,7 @@ export function injectWarningBanner(
         border: 0;
         box-shadow: none;
         box-sizing: border-box;
+        width: 100%;
         max-width: 100%;
       }
       .analysis-links-box[hidden] {
@@ -255,36 +256,40 @@ export function injectWarningBanner(
         flex-direction: column;
         align-items: center;
         flex-shrink: 0;
+        width: min(100%, 380px);
       }
       .analysis-links-list {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        justify-content: center;
+        justify-items: center;
+        gap: 8px;
+        width: 100%;
+        max-width: 380px;
+        margin-inline: auto;
         max-height: clamp(40px, 15cqh, 85px);
         overflow-y: auto;
-      }
-      .source-link {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        font-size: clamp(0.6rem, 1.6cqh, 0.75rem);
-        color: #ffffff;
-        text-decoration: underline;
-        text-underline-offset: 2px;
-        word-break: break-all;
-        cursor: pointer;
-        transition: color 0.15s ease;
       }
       .source-link-row {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        align-items: center;
+        width: 100%;
+        min-width: 0;
+        text-align: center;
       }
-      .source-link-title {
+      .source-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        font-size: 20px;
         color: #fef08a;
-        font-size: clamp(0.58rem, 1.5cqh, 0.7rem);
-        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 2px;
         overflow-wrap: anywhere;
+        cursor: pointer;
+        transition: color 0.15s ease;
       }
       .source-link:hover {
         color: #fef08a;
@@ -293,8 +298,9 @@ export function injectWarningBanner(
         flex-shrink: 0;
         font-weight: bold;
       }
-      .source-link-url {
-        word-break: break-all;
+      .source-link-domain {
+        text-align: center;
+        overflow-wrap: anywhere;
       }
       .source-toggle-btn {
         display: inline-flex;
@@ -351,8 +357,8 @@ export function injectWarningBanner(
       <div class="analysis-preview">
         <div class="description-text">${escapeHtml(description)}</div>
       </div>
-      ${linksHtml}
       <button type="button" class="show-anyway-btn">해당 사실을 인지하고 있으며, 계속 보겠습니다.</button>
+      ${linksHtml}
     </div>
   `;
 

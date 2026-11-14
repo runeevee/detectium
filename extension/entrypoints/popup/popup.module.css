@@ -230,20 +230,24 @@
   border-top: 0.0625rem dashed #fca5a5;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.125rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .warningLinksTitle {
   font-weight: 700;
   font-size: 0.625rem;
   color: #991b1b;
+  text-align: center;
 }
 
 .sourceToggleBtn {
-  align-self: flex-start;
+  align-self: center;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 0.375rem;
   min-height: 1.75rem;
   padding: 0 0.125rem;
@@ -277,17 +281,27 @@
 
 .warningLinksList {
   margin: 0;
-  padding-left: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: center;
+  justify-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 22rem;
+  list-style: none;
 }
 
 .warningLinkItem {
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.25rem 0.375rem;
+  border: 0.0625rem solid #fecaca;
+  border-radius: 0.25rem;
+  background-color: #fff;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .sourceLinkTitle {
@@ -295,15 +309,24 @@
   font-size: 0.625rem;
   font-weight: 700;
   overflow-wrap: anywhere;
+  line-height: 1.25;
+  text-align: center;
 }
 
 .sourceLink {
-  color: #2563eb;
-  font-size: 0.625rem;
+  color: #ca8a04;
+  font-size: 1.25rem;
   text-decoration: underline;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: color 0.15s ease;
 }
 
 .sourceLink:hover {
-  color: #1d4ed8;
+  color: #a16207;
+}
+
+.sourceLink:focus-visible {
+  outline: 0.125rem solid #2563eb;
+  outline-offset: 0.125rem;
 }

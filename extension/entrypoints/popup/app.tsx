@@ -6,7 +6,7 @@ function getSourceTitle(url: string): string {
   try {
     return new URL(url).hostname;
   } catch {
-    return url;
+    return "";
   }
 }
 
@@ -265,16 +265,14 @@ export default () => {
                                         <For each={post.analysisResult.links}>
                                           {(link) => (
                                             <li class={css.warningLinkItem}>
-                                              <span class={css.sourceLinkTitle}>{getSourceTitle(link)}</span>
                                               <a
                                                 href={link}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 class={css.sourceLink}
                                                 onClick={(e) => handleOpenLink(link, e)}
-                                                title={link}
                                               >
-                                                {link} ↗
+                                                {getSourceTitle(link)} ↗
                                               </a>
                                             </li>
                                           )}
