@@ -204,7 +204,7 @@ export default defineContentScript({
 
       const titleEl = document.createElement("strong");
       titleEl.style.cssText = "font-size: 14px; font-weight: 600; color: #fff;";
-      titleEl.textContent = `🔍 ${title}`;
+      titleEl.textContent = title;
 
       const closeBtn = document.createElement("span");
       closeBtn.style.cssText = "cursor: pointer; opacity: 0.7; font-size: 16px;";

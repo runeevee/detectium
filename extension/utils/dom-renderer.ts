@@ -151,15 +151,30 @@ export function injectWarningBanner(
   const linksHtml =
     links.length > 0
       ? `
-      <div class="analysis-links-box">
-        <span class="analysis-links-title">🔗 출처 링크</span>
-        <div class="analysis-links-list">
-          ${links
-            .map(
-              (link) =>
-                `<a class="source-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link)}"><span class="source-link-icon">↗</span><span class="source-link-url">${escapeHtml(link)}</span></a>`
-            )
-            .join("")}
+      <div class="source-section">
+        <button
+          type="button"
+          class="source-toggle-btn"
+          aria-expanded="false"
+          aria-label="출처 확인하기, 펼치기"
+        >
+          <span class="source-toggle-icon" aria-hidden="true">▶</span>
+          <span>출처 확인하기</span>
+        </button>
+        <div class="analysis-links-box" hidden>
+          <div class="analysis-links-list">
+            ${links
+              .map((link) => {
+                let title = link;
+                try {
+                  title = new URL(link).hostname;
+                } catch {
+                  // Keep the URL as the title when it cannot be parsed.
+                }
+                return `<div class="source-link-row"><span class="source-link-title">${escapeHtml(title)}</span><a class="source-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link)}"><span class="source-link-icon" aria-hidden="true">↗</span><span class="source-link-url">${escapeHtml(link)}</span></a></div>`;
+              })
+              .join("")}
+          </div>
         </div>
       </div>
     `
@@ -172,6 +187,15 @@ export function injectWarningBanner(
         display: block;
         container-type: size;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      * {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      *::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
       }
       .overlay {
         position: absolute;
@@ -207,12 +231,15 @@ export function injectWarningBanner(
       }
       .analysis-links-box {
         margin-top: 8px;
-        padding: 6px 10px;
-        background: rgba(0, 0, 0, 0.35);
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        border-radius: 6px;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
         box-sizing: border-box;
         max-width: 100%;
+      }
+      .analysis-links-box[hidden] {
+        display: none;
       }
       .analysis-links-title {
         font-size: clamp(0.62rem, 1.8cqh, 0.78rem);
@@ -221,6 +248,12 @@ export function injectWarningBanner(
         margin-bottom: 4px;
         display: block;
         letter-spacing: -0.01em;
+      }
+      .source-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex-shrink: 0;
       }
       .analysis-links-list {
         display: flex;
@@ -241,6 +274,17 @@ export function injectWarningBanner(
         cursor: pointer;
         transition: color 0.15s ease;
       }
+      .source-link-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .source-link-title {
+        color: #fef08a;
+        font-size: clamp(0.58rem, 1.5cqh, 0.7rem);
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
       .source-link:hover {
         color: #fef08a;
       }
@@ -250,6 +294,38 @@ export function injectWarningBanner(
       }
       .source-link-url {
         word-break: break-all;
+      }
+      .source-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 32px;
+        padding: 0 6px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        color: #fff;
+        font: inherit;
+        font-size: clamp(0.7rem, 2cqh, 0.85rem);
+        font-weight: 600;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .source-toggle-icon {
+        line-height: 1;
+      }
+      .source-toggle-btn:hover,
+      .source-toggle-btn:active,
+      .source-toggle-btn:focus {
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+      }
+      .source-toggle-btn:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
       }
       .show-anyway-btn {
         margin-top: 0;
@@ -273,11 +349,27 @@ export function injectWarningBanner(
     <div class="overlay">
       <div class="analysis-preview">
         <div class="description-text">${escapeHtml(description)}</div>
-        ${linksHtml}
       </div>
+      ${linksHtml}
       <button type="button" class="show-anyway-btn">해당 사실을 인지하고 있으며, 계속 보겠습니다.</button>
     </div>
   `;
+
+  const sourceToggleButton = shadow.querySelector<HTMLButtonElement>(".source-toggle-btn");
+  const sourceToggleIcon = shadow.querySelector<HTMLElement>(".source-toggle-icon");
+  const sourceLinks = shadow.querySelector<HTMLElement>(".analysis-links-box");
+  if (sourceToggleButton && sourceToggleIcon && sourceLinks) {
+    sourceToggleButton.addEventListener("click", () => {
+      const isVisible = sourceLinks.hidden;
+      sourceLinks.hidden = !isVisible;
+      sourceToggleIcon.textContent = isVisible ? "▼" : "▶";
+      sourceToggleButton.setAttribute("aria-expanded", String(isVisible));
+      sourceToggleButton.setAttribute(
+        "aria-label",
+        isVisible ? "출처 확인하기, 접기" : "출처 확인하기, 펼치기"
+      );
+    });
+  }
 
   // 오버레이 내 링크 클릭 시 새 탭으로 브라우저 이동 처리
   shadow.querySelectorAll<HTMLAnchorElement>("a.source-link").forEach((anchor) => {
