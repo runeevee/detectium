@@ -1,6 +1,7 @@
 import { extractVisiblePosts } from "../utils/extractors";
 import {
   injectWarningBanner,
+  injectWarningReviewButton,
   removeWarningBanner,
   updateAnalysisStatus,
 } from "../utils/dom-renderer";
@@ -33,16 +34,53 @@ export default defineContentScript({
     const pendingElementsMap = new Map<string, HTMLElement>();
     const analyzedPostIds = new Set<string>();
     const analysisResultsByPostId = new Map<string, AnalysisResult>();
-    const dismissedWarningPostIds = new Set<string>();
+
+    const DISMISSED_WARNINGS_SESSION_KEY = "detectium_dismissed_warnings";
+    const loadDismissedWarnings = (): Set<string> => {
+      try {
+        const raw = sessionStorage.getItem(DISMISSED_WARNINGS_SESSION_KEY);
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) {
+            return new Set(arr.filter((item): item is string => typeof item === "string"));
+          }
+        }
+      } catch {
+        // sessionStorage 접근 불가 시 무시
+      }
+      return new Set<string>();
+    };
+
+    const dismissedWarningPostIds = loadDismissedWarnings();
+    const persistDismissedWarnings = () => {
+      try {
+        sessionStorage.setItem(
+          DISMISSED_WARNINGS_SESSION_KEY,
+          JSON.stringify(Array.from(dismissedWarningPostIds))
+        );
+      } catch {
+        // sessionStorage 접근 불가 시 무시
+      }
+    };
 
     const getPostKey = (data: PostData): string => `${data.platform}:${data.id}`;
     const showWarningBanner = (element: HTMLElement, result: AnalysisResult, postKey: string) => {
+      const handleDismiss = () => {
+        dismissedWarningPostIds.add(postKey);
+        persistDismissedWarnings();
+      };
+
+      const handleReview = () => {
+        dismissedWarningPostIds.delete(postKey);
+        persistDismissedWarnings();
+      };
+
       if (dismissedWarningPostIds.has(postKey)) {
+        injectWarningReviewButton(element, result, handleDismiss, handleReview);
         return;
       }
-      injectWarningBanner(element, result, () => {
-        dismissedWarningPostIds.add(postKey);
-      });
+
+      injectWarningBanner(element, result, handleDismiss, handleReview);
     };
 
     const renderAnalysisResult = (element: HTMLElement, result: AnalysisResult, postKey: string) => {
@@ -56,6 +94,18 @@ export default defineContentScript({
         updateAnalysisStatus(element, "passed");
         removeWarningBanner(element);
       }
+    };
+
+    const syncFromScannedPosts = (items: ScannedPostItem[]) => {
+      analyzedPostIds.clear();
+      analysisResultsByPostId.clear();
+      items.forEach((item) => {
+        if (item.analysisResult && (item.status === "analyzed" || Boolean(item.analysisResult.description !== undefined))) {
+          const key = getPostKey(item);
+          analyzedPostIds.add(key);
+          analysisResultsByPostId.set(key, item.analysisResult);
+        }
+      });
     };
 
     const storedScannedPostsReady = new Promise<void>((resolve) => {
@@ -72,13 +122,7 @@ export default defineContentScript({
         }
 
         const items: ScannedPostItem[] = Array.isArray(res?.scannedPosts) ? res.scannedPosts : [];
-        items.forEach((item) => {
-          if (item.status === "analyzed" && typeof item.analysisResult?.description === "string") {
-            const key = getPostKey(item);
-            analyzedPostIds.add(key);
-            analysisResultsByPostId.set(key, item.analysisResult);
-          }
-        });
+        syncFromScannedPosts(items);
         resolve();
       });
     });
@@ -100,10 +144,29 @@ export default defineContentScript({
           isExtensionActive = changes.isEnabled.newValue;
         }
       }
+
+      if (area === "local" && changes.scannedPosts) {
+        const newItems: ScannedPostItem[] = Array.isArray(changes.scannedPosts.newValue)
+          ? changes.scannedPosts.newValue
+          : [];
+        syncFromScannedPosts(newItems);
+
+        // 팝업 등에서 캐시가 비워진 경우(비어있는 배열 등) 현재 페이지의 상태 및 배너 리셋
+        if (newItems.length === 0) {
+          document.querySelectorAll<HTMLElement>("[data-detectium-status]").forEach((el) => {
+            delete el.dataset.detectiumStatus;
+            delete el.dataset.detectiumPostKey;
+            delete el.dataset.detectiumImageCount;
+            removeWarningBanner(el);
+            updateAnalysisStatus(el, null);
+          });
+        }
+      }
     });
 
-    // 스캔 게시글 스토리지 동기화 (경쟁 상태 방지용 직렬 큐)
+    // 스캔 게시글 스토리지 동기화 (경쟁 상태 방지용 직렬 큐 및 용량 제한)
     let saveQueue: Promise<void> = Promise.resolve();
+    const MAX_STORED_SCANNED_POSTS = 500;
 
     const saveOrUpdateScannedPosts = (newOrUpdatedItems: ScannedPostItem[]): Promise<void> => {
       if (!chrome.storage?.local) return saveQueue;
@@ -116,21 +179,42 @@ export default defineContentScript({
                 const existing: ScannedPostItem[] = Array.isArray(res?.scannedPosts) ? res.scannedPosts : [];
                 const map = new Map<string, ScannedPostItem>();
 
-                existing.forEach((item) => map.set(item.id, item));
+                // 기존 항목 map 초기화 (key: getPostKey)
+                existing.forEach((item) => {
+                  const key = getPostKey(item);
+                  map.set(key, item);
+                });
 
                 newOrUpdatedItems.forEach((item) => {
-                  const prev = map.get(item.id);
-                  map.set(item.id, {
+                  const key = getPostKey(item);
+                  const prev = map.get(key);
+
+                  // 기존 항목이 이미 분석 완료된 경우 새 항목이 분석 완료가 아니라면 상태 강등 방지
+                  const isPrevAnalyzed = prev?.status === "analyzed" && Boolean(prev?.analysisResult);
+                  const isNewAnalyzed = item.status === "analyzed" && Boolean(item.analysisResult);
+
+                  const preservedStatus = isNewAnalyzed ? "analyzed" : isPrevAnalyzed ? "analyzed" : item.status;
+                  const preservedResult = item.analysisResult || prev?.analysisResult;
+
+                  map.set(key, {
                     ...prev,
                     ...item,
-                    analysisResult: item.analysisResult || prev?.analysisResult,
+                    status: preservedStatus,
+                    analysisResult: preservedResult,
+                    timestamp: item.timestamp || prev?.timestamp || Date.now(),
                   });
                 });
 
                 const merged = Array.from(map.values())
-                  .sort((a, b) => b.timestamp - a.timestamp);
+                  .sort((a, b) => b.timestamp - a.timestamp)
+                  .slice(0, MAX_STORED_SCANNED_POSTS);
 
-                chrome.storage.local.set({ scannedPosts: merged }, () => resolve());
+                chrome.storage.local.set({ scannedPosts: merged }, () => {
+                  if (chrome.runtime.lastError) {
+                    console.error("[Detectium] 스토리지 저장 오류:", chrome.runtime.lastError.message);
+                  }
+                  resolve();
+                });
               });
             })
         )
@@ -332,18 +416,34 @@ export default defineContentScript({
           const analyzedItems: ScannedPostItem[] = [];
 
           response.results.forEach((result) => {
-            const el = pendingElementsMap.get(result.id);
-            const postCandidate = validPostsToSend.find((p) => p.data.id === result.id);
+            const trimmedResultId = (result.id || "").trim();
+            // ID 매칭: 정확히 일치하거나 대소문자 무시 또는 단일 게시글 폴백
+            const postCandidate =
+              validPostsToSend.find((p) => p.data.id === trimmedResultId) ||
+              validPostsToSend.find((p) => p.data.id.toLowerCase() === trimmedResultId.toLowerCase()) ||
+              (validPostsToSend.length === 1 ? validPostsToSend[0] : undefined);
+
+            const canonicalId = postCandidate ? postCandidate.data.id : trimmedResultId;
+            const el =
+              pendingElementsMap.get(canonicalId) ||
+              pendingElementsMap.get(trimmedResultId) ||
+              (postCandidate ? pendingElementsMap.get(postCandidate.data.id) : undefined);
+
+            const canonicalResult: AnalysisResult = {
+              ...result,
+              id: canonicalId,
+            };
+
             if (postCandidate) {
               const key = getPostKey(postCandidate.data);
               analyzedPostIds.add(key);
-              analysisResultsByPostId.set(key, result);
+              analysisResultsByPostId.set(key, canonicalResult);
               if (el) {
-                renderAnalysisResult(el, result, key);
+                renderAnalysisResult(el, canonicalResult, key);
               }
-              analyzedItems.push(buildScannedItem(postCandidate.data, "analyzed", { analysisResult: result }));
+              analyzedItems.push(buildScannedItem(postCandidate.data, "analyzed", { analysisResult: canonicalResult }));
             } else if (el) {
-              renderAnalysisResult(el, result, result.id);
+              renderAnalysisResult(el, canonicalResult, canonicalId);
             }
           });
 
@@ -430,6 +530,7 @@ export default defineContentScript({
         }
 
         element.dataset.detectiumStatus = "done";
+        element.dataset.detectiumImageCount = String(data.imageUrls?.length || 0);
         const previousResult = analysisResultsByPostId.get(key);
         if (previousResult) {
           renderAnalysisResult(element, previousResult, key);

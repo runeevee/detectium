@@ -43,6 +43,7 @@ export default defineConfig({
       "*://*.twimg.com/*",
       "*://pbs.twimg.com/*",
       "*://*.instagram.com/*",
+      "*://*.threads.net/*",
       "*://*.x.com/*",
       "*://*.twitter.com/*",
       "<all_urls>",

@@ -1,6 +1,7 @@
 import type { ExtractedPost, PostExtractor } from "./types";
 import { xExtractor } from "./x-extractor";
 import { instagramExtractor } from "./instagram-extractor";
+import { threadsExtractor } from "./threads-extractor";
 import { genericExtractor } from "./generic-extractor";
 
 export * from "./types";
@@ -8,12 +9,14 @@ export * from "./common";
 export * from "./base-extractor";
 export * from "./x-extractor";
 export * from "./instagram-extractor";
+export * from "./threads-extractor";
 export * from "./generic-extractor";
 
 // 기본 등록된 Extractor 목록 (우선순위 순서)
 const registeredExtractors: PostExtractor[] = [
   xExtractor,
   instagramExtractor,
+  threadsExtractor,
 ];
 
 /**

@@ -49,6 +49,19 @@ export interface PostInput {
   }>;
 }
 
+type SingleAnalysisResult = z.infer<typeof AnalysisSchema>["results"][number];
+
+// 서버 인메모리 캐시 (게시글 고유 키 기준)
+const serverAnalysisCache = new Map<string, SingleAnalysisResult>();
+const MAX_SERVER_CACHE_SIZE = 1000;
+
+function getPostCacheKey(post: PostInput): string {
+  if (post.id) {
+    return `${post.platform || "generic"}:${post.id.trim()}`;
+  }
+  return `${post.platform || "generic"}:${post.content || ""}`;
+}
+
 // ArrayBuffer -> Base64 안전 변환 (서버 사이드 폴백용)
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return Buffer.from(buffer).toString("base64");
@@ -125,8 +138,33 @@ app.post("/api/analyze", async (c) => {
       return c.json({ success: true, results: [] });
     }
 
+    // 서버 캐시 조회 (이미 분석된 게시글은 LLM 호출 없이 반환)
+    const cachedResults: SingleAnalysisResult[] = [];
+    const uncachedPosts: PostInput[] = [];
+
+    validPosts.forEach((p) => {
+      const cacheKey = getPostCacheKey(p);
+      const cached = serverAnalysisCache.get(cacheKey);
+      if (cached) {
+        cachedResults.push({
+          ...cached,
+          id: p.id,
+        });
+      } else {
+        uncachedPosts.push(p);
+      }
+    });
+
+    if (uncachedPosts.length === 0) {
+      console.log(`[Detectium Server] 모든 게시글(${validPosts.length}개) 서버 캐시 적중! LLM 호출 생략`);
+      return c.json({
+        success: true,
+        results: cachedResults,
+      });
+    }
+
     const postsWithImages = await Promise.all(
-      validPosts.map(async (p) => {
+      uncachedPosts.map(async (p) => {
         const analysisImages: Array<{ label: string; dataUrl: string }> = [];
 
         // 1. 클라이언트(익스텐션)에서 이미 Data URL로 변환된 analysisImages가 있으면 최우선 사용
@@ -330,9 +368,24 @@ app.post("/api/analyze", async (c) => {
       };
     });
 
+    // 새 분석 결과를 서버 캐시에 저장
+    enrichedResults.forEach((res) => {
+      const originalPost = uncachedPosts.find((p) => p.id === res.id);
+      if (originalPost) {
+        const cacheKey = getPostCacheKey(originalPost);
+        if (serverAnalysisCache.size >= MAX_SERVER_CACHE_SIZE) {
+          const firstKey = serverAnalysisCache.keys().next().value;
+          if (firstKey) serverAnalysisCache.delete(firstKey);
+        }
+        serverAnalysisCache.set(cacheKey, res);
+      }
+    });
+
+    const combinedResults = [...cachedResults, ...enrichedResults];
+
     return c.json({
       success: true,
-      results: enrichedResults,
+      results: combinedResults,
     });
   } catch (err: any) {
     console.error("[Detectium Server] 분석 오류:", err);

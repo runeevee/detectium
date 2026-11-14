@@ -53,7 +53,7 @@ export type AnalysisImage = {
 
 export interface PostPayloadForServer {
   id: string;
-  platform: "x" | "instagram" | "youtube" | "generic";
+  platform: "x" | "instagram" | "youtube" | "threads" | "thread" | "generic";
   content: string;
   imageUrls?: string[];
   analysisImages?: AnalysisImage[];

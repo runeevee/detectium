@@ -104,8 +104,17 @@ export function extractXPost(article: HTMLElement): ExtractedPost | null {
     }
   }
 
+  // 단일 트윗 상세 페이지의 경우 URL pathname에서도 추출
+  if (!tweetId && typeof window !== "undefined") {
+    const statusId = getXStatusId(window.location.pathname);
+    if (statusId) {
+      tweetId = `x-${statusId}`;
+    }
+  }
+
   if (!tweetId) {
-    tweetId = `x-${generateSimpleHash(content + imageUrls.join(""))}`;
+    const cleanImageUrls = imageUrls.map((u) => u.split("?")[0]);
+    tweetId = `x-${generateSimpleHash(content + cleanImageUrls.join(""))}`;
   }
 
   article.dataset.detectiumImageCount = String(imageUrls.length);

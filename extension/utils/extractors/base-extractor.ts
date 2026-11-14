@@ -41,10 +41,13 @@ export abstract class BasePostExtractor implements PostExtractor {
       return extracted;
     }
 
-    const firstIndex = Math.max(0, visibleIndexes[0] - 2);
+    const firstVisible = visibleIndexes[0]!;
+    const lastVisible = visibleIndexes[visibleIndexes.length - 1]!;
+
+    const firstIndex = Math.max(0, firstVisible - 2);
     const lastIndex = Math.min(
       candidateElements.length - 1,
-      visibleIndexes[visibleIndexes.length - 1] + 2
+      lastVisible + 2
     );
     const visibleIndexSet = new Set(visibleIndexes);
     const viewportCenterY = window.innerHeight / 2;
@@ -60,13 +63,13 @@ export abstract class BasePostExtractor implements PostExtractor {
 
         if (!aVisible) {
           const aDistance =
-            a.index < visibleIndexes[0]
-              ? visibleIndexes[0] - a.index
-              : a.index - visibleIndexes[visibleIndexes.length - 1];
+            a.index < firstVisible
+              ? firstVisible - a.index
+              : a.index - lastVisible;
           const bDistance =
-            b.index < visibleIndexes[0]
-              ? visibleIndexes[0] - b.index
-              : b.index - visibleIndexes[visibleIndexes.length - 1];
+            b.index < firstVisible
+              ? firstVisible - b.index
+              : b.index - lastVisible;
           if (aDistance !== bDistance) {
             return aDistance - bDistance;
           }

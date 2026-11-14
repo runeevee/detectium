@@ -1,6 +1,6 @@
 export interface PostData {
   id: string;
-  platform: "x" | "instagram" | "youtube" | "generic";
+  platform: "x" | "instagram" | "youtube" | "threads" | "thread" | "generic";
   content: string;
   imageUrls?: string[];
 }
@@ -32,7 +32,7 @@ export interface AnalyzePostsResponse {
  */
 export interface ScannedPostItem {
   id: string;
-  platform: "x" | "instagram" | "youtube" | "generic";
+  platform: "x" | "instagram" | "youtube" | "threads" | "thread" | "generic";
   content: string;
   contentLength: number;
   isVisible: boolean;

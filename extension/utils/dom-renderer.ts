@@ -1,5 +1,4 @@
 import type { AnalysisResult } from "./types";
-import materialIconsFontUrl from "@font/mtrl-outlined-fill-grad-opsz-wght.woff2?url&no-inline";
 
 function escapeHtml(str: string): string {
   return str
@@ -102,7 +101,8 @@ export function updateAnalysisStatus(
 export function injectWarningBanner(
   targetElement: HTMLElement,
   result: AnalysisResult,
-  onDismiss?: () => void
+  onDismiss?: () => void,
+  onReview?: () => void
 ) {
   // 이미 경고창이 삽입되어 있는지 확인
   if (targetElement.querySelector(".detectium-overlay-host")) {
@@ -172,7 +172,7 @@ export function injectWarningBanner(
                 } catch {
                   // Do not expose malformed source URLs as display text.
                 }
-                return `<div class="source-link-row"><a class="source-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer"><span class="source-link-icon" aria-hidden="true">↗</span><span class="source-link-domain">${escapeHtml(title)}</span></a></div>`;
+                return `<div class="source-link-row"><a class="source-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer"><span class="source-link-domain">${escapeHtml(title)}</span></a></div>`;
               })
               .join("")}
           </div>
@@ -402,19 +402,29 @@ export function injectWarningBanner(
 
   shadow.querySelector(".show-anyway-btn")?.addEventListener("click", () => {
     host.remove();
-    injectWarningReviewButton(targetElement, result, onDismiss);
+    injectWarningReviewButton(targetElement, result, onDismiss, onReview);
     onDismiss?.();
   });
 
   targetElement.appendChild(host);
 }
 
-function injectWarningReviewButton(
+export function injectWarningReviewButton(
   targetElement: HTMLElement,
   result: AnalysisResult,
-  onDismiss?: () => void
+  onDismiss?: () => void,
+  onReview?: () => void
 ) {
-  targetElement.querySelector(".detectium-warning-review-host")?.remove();
+  if (targetElement.querySelector(".detectium-warning-review-host")) {
+    return;
+  }
+  targetElement.querySelector(".detectium-overlay-host")?.remove();
+
+  // 게시글 컨테이너가 position: static이면 relative로 변경
+  const currentPosition = window.getComputedStyle(targetElement).position;
+  if (currentPosition === "static") {
+    targetElement.style.position = "relative";
+  }
 
   const host = document.createElement("div");
   host.className = "detectium-warning-review-host";
@@ -430,12 +440,6 @@ function injectWarningReviewButton(
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `
     <style>
-      @font-face {
-        font-family: "Material Icons";
-        src: url("${chrome.runtime.getURL(materialIconsFontUrl.replace(/^\/+/, ""))}") format("woff2");
-        font-weight: 300;
-        font-style: normal;
-      }
       :host {
         all: initial;
         display: block;
@@ -443,38 +447,39 @@ function injectWarningReviewButton(
       }
       .warning-review-button {
         box-sizing: border-box;
-        display: grid;
-        place-items: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         width: 36px;
         height: 36px;
-        border: 1px solid #b91c1c;
+        border: 1.5px solid #b91c1c;
         border-radius: 50%;
         padding: 0;
-        background: transparent;
+        background: #ffffff;
         color: #b91c1c;
-        font-family: inherit;
-        font-size: 22px;
-        font-weight: 600;
-        line-height: 1;
         cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+        transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease;
       }
-      .mtrl-icon {
-        font-family: "Material Icons";
-        font-weight: 300;
-        font-style: normal;
-        font-size: 22px;
-        line-height: 1;
-        letter-spacing: normal;
-        text-transform: none;
-        white-space: nowrap;
-        word-wrap: normal;
-        direction: ltr;
-        font-feature-settings: "liga";
-        -webkit-font-smoothing: antialiased;
+      .warning-review-button:hover {
+        background-color: #b91c1c;
+        color: #ffffff;
+        transform: scale(1.08);
+      }
+      .warning-review-button:active {
+        transform: scale(0.96);
+      }
+      .info-icon {
+        display: block;
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
       }
     </style>
     <button class="warning-review-button" type="button" aria-label="경고 다시 보기" title="경고 다시 보기">
-      <span class="mtrl-icon" aria-hidden="true">info</span>
+      <svg class="info-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+      </svg>
     </button>
   `;
 
@@ -482,7 +487,8 @@ function injectWarningReviewButton(
     event.preventDefault();
     event.stopPropagation();
     host.remove();
-    injectWarningBanner(targetElement, result, onDismiss);
+    injectWarningBanner(targetElement, result, onDismiss, onReview);
+    onReview?.();
   });
 
   targetElement.appendChild(host);
