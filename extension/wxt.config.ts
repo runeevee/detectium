@@ -9,6 +9,18 @@ export default defineConfig({
   manifest: {
     name: "Detectium",
     description: "",
+    icons: {
+      16: "img/logo-16.png",
+      32: "img/logo-32.png",
+      48: "img/logo-48.png",
+      128: "img/logo-128.png",
+    },
+    action: {
+      default_icon: {
+        16: "img/logo-16.png",
+        32: "img/logo-32.png",
+      },
+    },
     permissions: ["storage", "contextMenus", "activeTab", "downloads"],
     host_permissions: [
       "https://api.openai.com/*",

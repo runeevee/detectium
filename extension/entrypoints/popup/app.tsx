@@ -136,7 +136,7 @@ export default () => {
           {/* 헤더 */}
           <header class={css.header}>
             <div class={css.brand}>
-              <span class={`mtrl-icon ${css.brandIcon}`}>verified_user</span>
+              <img class={css.brandIcon} src="/img/logo-48.png" alt="" aria-hidden="true" />
               <span class={css.brandTitle}>커트니</span>
             </div>
             <label class={css.switchContainer}>
