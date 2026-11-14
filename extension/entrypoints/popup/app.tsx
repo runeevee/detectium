@@ -1,7 +1,15 @@
-import { createSignal, onMount, Switch, Match, For } from "solid-js";
+import { createSignal, onMount, Switch, Match, For, Show } from "solid-js";
 import { DETECTION_THRESHOLD } from "../../utils/constants";
 import type { ScannedPostItem } from "../../utils/types";
 import css from "./popup.module.css";
+
+function getSourceTitle(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
 
 export default () => {
   const [isEnabled, setIsEnabled] = createSignal<boolean>(true);
@@ -228,40 +236,60 @@ export default () => {
                 <Match when={showWarningHistory()}>
                   <div class={css.warningHistory}>
                     <For each={warningPosts()}>
-                      {(post) => (
-                        <details class={css.warningItem}>
-                          <summary class={css.warningSummary}>
-                            {post.platform} · 위험도 {post.analysisResult?.riskScore}점
-                          </summary>
-                          <div class={css.warningDetails}>
-                            <p>{post.content}</p>
-                            <p>{post.analysisResult?.description}</p>
-                            {post.analysisResult?.links && post.analysisResult.links.length > 0 && (
-                              <div class={css.warningLinks}>
-                                <span class={css.warningLinksTitle}>🔗 출처 링크</span>
-                                <ul class={css.warningLinksList}>
-                                  <For each={post.analysisResult.links}>
-                                    {(link) => (
-                                      <li class={css.warningLinkItem}>
-                                        <a
-                                          href={link}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          class={css.sourceLink}
-                                          onClick={(e) => handleOpenLink(link, e)}
-                                          title={link}
-                                        >
-                                          {link} ↗
-                                        </a>
-                                      </li>
-                                    )}
-                                  </For>
-                                </ul>
-                              </div>
-                            )}
-                          </div>
-                        </details>
-                      )}
+                      {(post) => {
+                        const [showSourceLinks, setShowSourceLinks] = createSignal(false);
+                        return (
+                          <details class={css.warningItem}>
+                            <summary class={css.warningSummary}>
+                              {post.platform} · 위험도 {post.analysisResult?.riskScore}점
+                            </summary>
+                            <div class={css.warningDetails}>
+                              <p>{post.content}</p>
+                              <p>{post.analysisResult?.description}</p>
+                              {post.analysisResult?.links && post.analysisResult.links.length > 0 && (
+                                <>
+                                  <button
+                                    type="button"
+                                    class={css.sourceToggleBtn}
+                                    aria-expanded={showSourceLinks()}
+                                    aria-label={showSourceLinks() ? "출처 확인하기, 접기" : "출처 확인하기, 펼치기"}
+                                    onClick={() => setShowSourceLinks((visible) => !visible)}
+                                  >
+                                    <span class={css.sourceToggleIcon} aria-hidden="true">
+                                      {showSourceLinks() ? "▼" : "▶"}
+                                    </span>
+                                    <span>출처 확인하기</span>
+                                  </button>
+                                  <Show when={showSourceLinks()}>
+                                    <div class={css.warningLinks}>
+                                      <span class={css.warningLinksTitle}>출처 링크</span>
+                                      <ul class={css.warningLinksList}>
+                                        <For each={post.analysisResult.links}>
+                                          {(link) => (
+                                            <li class={css.warningLinkItem}>
+                                              <span class={css.sourceLinkTitle}>{getSourceTitle(link)}</span>
+                                              <a
+                                                href={link}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class={css.sourceLink}
+                                                onClick={(e) => handleOpenLink(link, e)}
+                                                title={link}
+                                              >
+                                                {link} ↗
+                                              </a>
+                                            </li>
+                                          )}
+                                        </For>
+                                      </ul>
+                                    </div>
+                                  </Show>
+                                </>
+                              )}
+                            </div>
+                          </details>
+                        );
+                      }}
                     </For>
                   </div>
                 </Match>

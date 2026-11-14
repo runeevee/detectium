@@ -1,4 +1,16 @@
-* { position: relative; box-sizing: border-box; }
+* {
+  position: relative;
+  box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 body { margin: 0; }
 
 h1,h2,h3,h4,h5,h6,p { margin: 0; }
@@ -13,27 +25,6 @@ h1,h2,h3,h4,h5,h6,p { margin: 0; }
   background-color: var(--bg-color);
   color: var(--txt-color);
   padding: var(--pad);
-}
-
-/* 스크롤바 전체 영역 */
-::-webkit-scrollbar {
-  width: 6px;      /* 세로 스크롤바 너비 */
-  height: 6px;     /* 가로 스크롤바 높이 */
-}
-
-/* 트랙(배경) */
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-/* 스크롤바 막대(썸) */
-::-webkit-scrollbar-thumb {
-  background: #bcbcbc;
-}
-
-/* 스크롤바 모서리 (가로+세로 만나는 지점) */
-::-webkit-scrollbar-corner {
-  background: transparent;
 }
 
 @font-face {
