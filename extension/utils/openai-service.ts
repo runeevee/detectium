@@ -73,11 +73,27 @@ export async function analyzePostsWithOpenAI(
   posts: PostData[],
   apiKey?: string
 ): Promise<AnalysisResult[]> {
-  const effectiveKey = apiKey?.trim() || process.env.OPENAI_API_KEY;
+// 전달받은 API 키를 우선 사용
+const passedKey = typeof apiKey === "string" ? apiKey.trim() : "";
 
-  if (!effectiveKey) {
-    throw new Error("OpenAI API 키가 설정되지 않았습니다. 확장 프로그램 설정 페이지에서 API 키를 입력해주세요.");
-  }
+// WXT 설정에서 주입된 환경변수 사용
+const envKey = process.env.OPENAI_API_KEY?.trim() || "";
+
+// 최종 API 키 결정
+const effectiveKey = passedKey || envKey;
+
+// API 키 자체는 절대 출력하지 않고 존재 여부만 확인
+console.log("[Detectium] API 키 확인:", {
+  passedKey: Boolean(passedKey),
+  envKey: Boolean(envKey),
+  effectiveKey: Boolean(effectiveKey),
+});
+
+if (!effectiveKey) {
+  throw new Error(
+    "OpenAI API 키가 전달되지 않았습니다. 환경변수와 확장 프로그램 설정을 확인해주세요."
+  );
+}
 
   if (!posts || posts.length === 0) {
     return [];
