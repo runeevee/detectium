@@ -13,16 +13,13 @@ dotenv.config({
   override: true,
 });
 
-const apiKey = process.env.OPENAI_API_KEY?.trim();
-if (!apiKey) {
-  throw new Error(`OPENAI_API_KEY가 ${envPath}에 설정되어 있지 않습니다.`);
-}
+const apiKey = process.env.OPENAI_API_KEY?.trim() || "";
 
 export default defineConfig({
   modules: ["@wxt-dev/module-solid"],
 
   manifest: {
-    name: "Detectium",
+    name: "커트니",
     description: "",
     icons: {
       16: "img/logo-16.png",
@@ -38,6 +35,8 @@ export default defineConfig({
     },
     permissions: ["storage", "contextMenus", "activeTab", "downloads"],
     host_permissions: [
+      "http://localhost:*/*",
+      "http://127.0.0.1:*/*",
       "https://api.openai.com/*",
       "*://*.cdninstagram.com/*",
       "*://*.fbcdn.net/*",
