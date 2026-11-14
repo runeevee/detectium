@@ -223,3 +223,41 @@
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
+
+.warningLinks {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 0.0625rem dashed #fca5a5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.warningLinksTitle {
+  font-weight: 700;
+  font-size: 0.625rem;
+  color: #991b1b;
+}
+
+.warningLinksList {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.warningLinkItem {
+  margin: 0;
+}
+
+.sourceLink {
+  color: #2563eb;
+  font-size: 0.625rem;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.sourceLink:hover {
+  color: #1d4ed8;
+}

@@ -126,6 +126,16 @@ export default () => {
     }
   };
 
+  const handleOpenLink = (url: string, e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof chrome !== "undefined" && chrome.tabs?.create) {
+      chrome.tabs.create({ url });
+    } else {
+      window.open(url, "_blank");
+    }
+  };
+
   return (
     <Switch>
       <Match when={loading()}>
@@ -226,6 +236,29 @@ export default () => {
                           <div class={css.warningDetails}>
                             <p>{post.content}</p>
                             <p>{post.analysisResult?.description}</p>
+                            {post.analysisResult?.links && post.analysisResult.links.length > 0 && (
+                              <div class={css.warningLinks}>
+                                <span class={css.warningLinksTitle}>🔗 출처 링크</span>
+                                <ul class={css.warningLinksList}>
+                                  <For each={post.analysisResult.links}>
+                                    {(link) => (
+                                      <li class={css.warningLinkItem}>
+                                        <a
+                                          href={link}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          class={css.sourceLink}
+                                          onClick={(e) => handleOpenLink(link, e)}
+                                          title={link}
+                                        >
+                                          {link} ↗
+                                        </a>
+                                      </li>
+                                    )}
+                                  </For>
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         </details>
                       )}

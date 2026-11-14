@@ -14,6 +14,7 @@ export interface AnalysisResult {
     nonViolatedPoints: string[];
   };
   extractedImageText?: string;
+  links?: string[];
 }
 
 export interface AnalyzePostsRequest {
